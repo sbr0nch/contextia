@@ -40,7 +40,7 @@ const REQUIRED_CRITICAL = [
 
 // Warning detectors: implemented but OFF by default (SPEC §9). JWT is a warning,
 // not a critical (too many public/expired sample tokens to call it a credential).
-const REQUIRED_WARNING = ['jwt', 'generic_high_entropy', 'internal_hostname', 'private_ip', 'email']
+const REQUIRED_WARNING = ['jwt', 'generic_high_entropy', 'internal_hostname', 'private_ip', 'email', 'credit_card', 'iban']
 
 function findsOwnType(d: Detector, text: string): boolean {
   return detect(text, { enabledDetectors: [d.id] }).some((f) => f.type === d.id)

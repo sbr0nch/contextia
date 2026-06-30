@@ -10,6 +10,23 @@ export function matchAll(re: RegExp, text: string): RawMatch[] {
   return out
 }
 
+/** Luhn checksum — true if the digit string is Luhn-valid (e.g. a card number). */
+export function luhn(digits: string): boolean {
+  let sum = 0
+  let alt = false
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let d = digits.charCodeAt(i) - 48
+    if (d < 0 || d > 9) return false
+    if (alt) {
+      d *= 2
+      if (d > 9) d -= 9
+    }
+    sum += d
+    alt = !alt
+  }
+  return sum % 10 === 0
+}
+
 /** Shannon entropy (bits per character) of a string. */
 export function shannon(s: string): number {
   const freq = new Map<string, number>()

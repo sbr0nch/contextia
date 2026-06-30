@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { detect } from '../src/detect.js'
 import { detectors } from '../src/detectors/index.js'
+import { luhn } from '../src/detectors/_util.js'
 
 // Drives every detector over its own fixture corpus. This both documents intent
 // and keeps each detector's scan() covered.
@@ -15,6 +16,18 @@ describe('detector fixtures', () => {
       })
     })
   }
+})
+
+describe('luhn', () => {
+  it('accepts a Luhn-valid number', () => {
+    expect(luhn('4242424242424242')).toBe(true)
+  })
+  it('rejects a Luhn-invalid number', () => {
+    expect(luhn('4242424242424241')).toBe(false)
+  })
+  it('rejects non-digit input', () => {
+    expect(luhn('4242-not-digits')).toBe(false)
+  })
 })
 
 describe('input cap', () => {

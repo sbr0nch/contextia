@@ -28,6 +28,8 @@ import { postmanKey } from './postman-key.js'
 import { linearKey } from './linear-key.js'
 import { squareToken } from './square-token.js'
 import { stripeWebhookSecret } from './stripe-webhook-secret.js'
+import { creditCard } from './credit-card.js'
+import { iban } from './iban.js'
 import { generated } from './generated.js'
 
 /** The active detector registry. Add new detectors here. */
@@ -61,6 +63,8 @@ export const detectors: Detector[] = [
   internalHostname,
   privateIp,
   email,
+  creditCard,
+  iban,
   ...generated,
 ]
 
