@@ -37,6 +37,8 @@ async function init(): Promise<void> {
     document.addEventListener('input', onInput, true)
     document.addEventListener('paste', () => setTimeout(scan, 0), true)
     document.addEventListener('keydown', onKeydown, true)
+    document.addEventListener('click', onSendClick, true)
+    document.addEventListener('submit', onSubmit, true)
     window.addEventListener('scroll', () => hud.setState(findings, composer, settings.mode), true)
     scan()
   }
@@ -87,12 +89,33 @@ function doRedact(action: LogAction): void {
 
 function onKeydown(e: KeyboardEvent): void {
   if (settings.mode !== 'block' || findings.length === 0) return
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault()
-    e.stopImmediatePropagation()
-    void appendLog(findings.map((f) => entry(f, 'blocked')))
-    hud.setState(findings, composer, settings.mode)
-  }
+  if (e.key === 'Enter' && !e.shiftKey) blockSubmit(e)
+}
+
+// Block mode must also stop a click on the send button, not just the Enter key.
+function onSendClick(e: MouseEvent): void {
+  if (settings.mode !== 'block' || findings.length === 0) return
+  if (isSendTarget(e.target)) blockSubmit(e)
+}
+
+function onSubmit(e: Event): void {
+  if (settings.mode !== 'block' || findings.length === 0) return
+  blockSubmit(e)
+}
+
+function isSendTarget(target: EventTarget | null): boolean {
+  const el = target instanceof Element ? target.closest('button, [role="button"]') : null
+  if (!el) return false
+  if (el.matches('[data-testid="send-button"], button[type="submit"]')) return true
+  const hint = `${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('data-testid') ?? ''}`.toLowerCase()
+  return /\bsend\b|invia|submit/.test(hint)
+}
+
+function blockSubmit(e: Event): void {
+  e.preventDefault()
+  e.stopImmediatePropagation()
+  void appendLog(findings.map((f) => entry(f, 'blocked')))
+  hud.setState(findings, composer, settings.mode)
 }
 
 async function allowPattern(f: Finding): Promise<void> {
