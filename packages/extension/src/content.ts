@@ -1,6 +1,7 @@
 import { detect, redact, type Config, type Finding } from '@contextia/engine'
 import { findComposer, type Composer } from './composer.js'
 import { Hud } from './ui.js'
+import { api } from './api.js'
 import {
   getSettings,
   toEngineConfig,
@@ -43,7 +44,7 @@ async function init(): Promise<void> {
     window.addEventListener('scroll', () => hud.setState(findings, composer, settings.mode), true)
     scan()
   }
-  chrome.storage.onChanged.addListener((changes) => {
+  api.storage.onChanged.addListener((changes) => {
     if (changes['settings']) {
       settings = { ...settings, ...(changes['settings'].newValue as Settings) }
       scan()

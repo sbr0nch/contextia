@@ -57,7 +57,7 @@ await page.waitForTimeout(150)
 await shot(page, '3-popover')
 
 await page.evaluate(() =>
-  document.getElementById('contextia-hud').shadowRoot.querySelector('.cx-redact-all').click(),
+  document.getElementById('contextia-hud').shadowRoot.querySelector('.cx-go').click(),
 )
 await page.waitForTimeout(450)
 await shot(page, '4-redacted')

@@ -3,7 +3,8 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 
-const root = 'dist'
+const root = process.argv[2] || 'dist'
+const zipName = root === 'dist' ? 'contextia.zip' : 'contextia-firefox.zip'
 const DOS_DATE = 0x21 // 1980-01-01
 const DOS_TIME = 0
 
@@ -83,5 +84,5 @@ eocd.writeUInt16LE(files.length, 10)
 eocd.writeUInt32LE(centralPart.length, 12)
 eocd.writeUInt32LE(localPart.length, 16)
 
-await writeFile('contextia.zip', Buffer.concat([localPart, centralPart, eocd]))
-console.log(`packaged: packages/extension/contextia.zip (${files.length} files)`)
+await writeFile(zipName, Buffer.concat([localPart, centralPart, eocd]))
+console.log(`packaged: packages/extension/${zipName} (${files.length} files)`)

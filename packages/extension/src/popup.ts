@@ -1,4 +1,5 @@
 import { getSettings, setSettings, getStats, getLog, clearAll, type Mode } from './storage.js'
+import { api } from './api.js'
 
 const MODE_LABELS: Record<Mode, string> = {
   warn: 'Warn — flag, let me decide',
@@ -68,7 +69,7 @@ async function render(): Promise<void> {
 
   const actions = el('div', 'cx-actions')
   const opts = el('button', '', 'Settings') as HTMLButtonElement
-  opts.addEventListener('click', () => chrome.runtime.openOptionsPage())
+  opts.addEventListener('click', () => api.runtime.openOptionsPage())
   const clear = el('button', '', 'Clear data') as HTMLButtonElement
   clear.addEventListener('click', async () => {
     await clearAll()

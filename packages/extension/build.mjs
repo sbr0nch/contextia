@@ -2,7 +2,8 @@ import * as esbuild from 'esbuild'
 import { cp, mkdir, rm, readFile, writeFile } from 'node:fs/promises'
 
 const watch = process.argv.includes('--watch')
-const outdir = 'dist'
+const firefox = process.argv.includes('--firefox')
+const outdir = firefox ? 'dist-firefox' : 'dist'
 
 await rm(outdir, { recursive: true, force: true })
 await mkdir(outdir, { recursive: true })
@@ -44,8 +45,15 @@ async function writeManifest() {
   manifest.version = `0.0.${n}`
   const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19)
   manifest.version_name = `0.0.${n} · built ${stamp} UTC`
+  if (firefox) {
+    // Firefox MV3 background is an event page (scripts), and it needs an add-on id.
+    manifest.background = { scripts: ['background.js'] }
+    manifest.browser_specific_settings = {
+      gecko: { id: 'contextia@contextia.dev', strict_min_version: '121.0' },
+    }
+  }
   await writeFile(`${outdir}/manifest.json`, JSON.stringify(manifest, null, 2))
-  console.log(`contextia: version 0.0.${n}`)
+  console.log(`contextia: version 0.0.${n}${firefox ? ' (firefox)' : ''}`)
 }
 
 async function copyStatic() {

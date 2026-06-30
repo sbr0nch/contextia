@@ -9,7 +9,9 @@
     "dev": "node build.mjs --watch",
     "typecheck": "tsc -p tsconfig.json",
     "package": "node build.mjs && node pack.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:firefox": "node build.mjs --firefox",
+    "package:firefox": "node build.mjs --firefox && node pack.mjs dist-firefox"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",

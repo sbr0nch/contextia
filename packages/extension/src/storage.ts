@@ -1,4 +1,5 @@
 import type { Config, Severity } from '@contextia/engine'
+import { api } from './api.js'
 
 export type Mode = 'warn' | 'auto-redact' | 'block' | 'off'
 
@@ -45,12 +46,12 @@ const STATS_KEY = 'stats'
 const LOG_MAX = 200
 
 export async function getSettings(): Promise<Settings> {
-  const r = await chrome.storage.local.get(SETTINGS_KEY)
+  const r = await api.storage.local.get(SETTINGS_KEY)
   return { ...DEFAULT_SETTINGS, ...((r[SETTINGS_KEY] as Partial<Settings>) ?? {}) }
 }
 
 export async function setSettings(settings: Settings): Promise<void> {
-  await chrome.storage.local.set({ [SETTINGS_KEY]: settings })
+  await api.storage.local.set({ [SETTINGS_KEY]: settings })
 }
 
 /** Map persisted settings onto the engine's Config. */
@@ -63,7 +64,7 @@ export function toEngineConfig(s: Settings): Config {
 }
 
 export async function getLog(): Promise<LogEntry[]> {
-  const r = await chrome.storage.local.get(LOG_KEY)
+  const r = await api.storage.local.get(LOG_KEY)
   return (r[LOG_KEY] as LogEntry[]) ?? []
 }
 
@@ -71,17 +72,17 @@ export async function appendLog(entries: LogEntry[]): Promise<void> {
   if (entries.length === 0) return
   const current = await getLog()
   const next = [...entries, ...current].slice(0, LOG_MAX)
-  await chrome.storage.local.set({ [LOG_KEY]: next })
+  await api.storage.local.set({ [LOG_KEY]: next })
 }
 
 export async function getStats(): Promise<Stats> {
-  const r = await chrome.storage.local.get(STATS_KEY)
+  const r = await api.storage.local.get(STATS_KEY)
   return (r[STATS_KEY] as Stats) ?? { caught: 0, redacted: 0, leaked: 0 }
 }
 
 export async function bumpStats(patch: Partial<Stats>): Promise<void> {
   const s = await getStats()
-  await chrome.storage.local.set({
+  await api.storage.local.set({
     [STATS_KEY]: {
       caught: s.caught + (patch.caught ?? 0),
       redacted: s.redacted + (patch.redacted ?? 0),
@@ -91,5 +92,5 @@ export async function bumpStats(patch: Partial<Stats>): Promise<void> {
 }
 
 export async function clearAll(): Promise<void> {
-  await chrome.storage.local.remove([LOG_KEY, STATS_KEY])
+  await api.storage.local.remove([LOG_KEY, STATS_KEY])
 }

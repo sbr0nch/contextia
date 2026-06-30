@@ -1,3 +1,5 @@
-// Minimal service worker. Settings defaults are applied lazily by getSettings,
-// so there is nothing to do on install beyond existing for the manifest.
-chrome.runtime.onInstalled.addListener(() => {})
+import { api } from './api.js'
+
+// Minimal service worker / background. Settings defaults are applied lazily by
+// getSettings, so there is nothing to do on install beyond existing.
+api.runtime.onInstalled.addListener(() => {})
