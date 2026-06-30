@@ -7,7 +7,8 @@
   "type": "module",
   "workspaces": [
     "packages/engine",
-    "packages/extension"
+    "packages/extension",
+    "packages/cli"
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",
