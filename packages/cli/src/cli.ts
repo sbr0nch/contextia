@@ -107,35 +107,46 @@ function cmdProxy(): void {
   })
 }
 
-// `contextia run [opts] -- <cmd>`: start the proxy on an ephemeral port, point the
-// child's ANTHROPIC/OPENAI base URL at it, and run the agent — no manual setup.
+// `contextia run [opts] [--] <cmd>`: start the proxy on an ephemeral port, point
+// the child's ANTHROPIC/OPENAI base URL at it, and run the agent — no manual setup.
+// The `--` separator is optional: PowerShell strips a bare `--`, so we parse the
+// known run-options and treat the first non-option token as the command.
 function cmdRun(): void {
-  const sep = argv.indexOf('--')
-  if (sep === -1 || sep === argv.length - 1) {
-    process.stderr.write('contextia: usage: contextia run [--mode m] [--all] [--reversible] [--redact-file p] -- <command> [args...]\n')
+  const rest = argv.slice(1) // tokens after `run`
+  let mode = 'redact'
+  let all = false
+  let reversible = false
+  let upstream: string | undefined
+  let redactFile: string | undefined
+  let i = 0
+  for (; i < rest.length; i++) {
+    const a = rest[i] as string
+    if (a === '--') { i++; break } // explicit separator: command starts after it
+    if (a === '--all') { all = true; continue }
+    if (a === '--reversible') { reversible = true; continue }
+    const valued = (name: string): string | undefined =>
+      a === name ? rest[++i] : a.startsWith(name + '=') ? a.slice(name.length + 1) : undefined
+    const m = valued('--mode'); if (m !== undefined) { mode = m; continue }
+    const u = valued('--upstream'); if (u !== undefined) { upstream = u; continue }
+    const r = valued('--redact-file'); if (r !== undefined) { redactFile = r; continue }
+    if (a.startsWith('--')) { process.stderr.write(`contextia: unknown option '${a}' for run\n`); process.exit(2) }
+    break // first non-option token: the command to launch
+  }
+  const cmd = rest[i]
+  const cmdArgs = rest.slice(i + 1)
+  if (!cmd) {
+    process.stderr.write('contextia: usage: contextia run [--mode m] [--all] [--reversible] [--redact-file p] [--] <command> [args...]\n')
     process.exit(2)
   }
-  const left = argv.slice(1, sep)
-  const cmd = argv[sep + 1] as string
-  const cmdArgs = argv.slice(sep + 2)
-  const lflag = (n: string): boolean => left.includes(n)
-  const lval = (n: string): string | undefined => {
-    const eq = left.find((a) => a.startsWith(n + '='))
-    if (eq) return eq.slice(n.length + 1)
-    const i = left.indexOf(n)
-    const next = left[i + 1]
-    return i >= 0 && next !== undefined && !next.startsWith('--') ? next : undefined
-  }
-  const mode = lval('--mode') ?? 'redact'
   if (!validMode(mode)) return
 
   const server = createProxyServer({
     port: 0,
     mode,
-    upstream: lval('--upstream'),
-    all: lflag('--all'),
-    custom: parseCustom(lval('--redact-file')),
-    reversible: lflag('--reversible'),
+    upstream,
+    all,
+    custom: parseCustom(redactFile),
+    reversible,
     onFinding: findingLogger(mode),
   })
   server.listen(0, '127.0.0.1', () => {
