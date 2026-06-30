@@ -1,4 +1,4 @@
-import { detectors, type Config, type Finding } from '@contextia/engine'
+import { detectors, type Config, type Finding } from '@sbr0nch/contextia-engine'
 
 export interface ScanOptions {
   all?: boolean

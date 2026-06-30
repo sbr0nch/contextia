@@ -1,4 +1,4 @@
-import { detectors } from '@contextia/engine'
+import { detectors } from '@sbr0nch/contextia-engine'
 import {
   getSettings,
   setSettings,

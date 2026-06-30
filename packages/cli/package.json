@@ -1,5 +1,5 @@
 {
-  "name": "@contextia/cli",
+  "name": "@sbr0nch/contextia",
   "version": "0.1.0",
   "description": "Contextia secret detection for the terminal.",
   "license": "MIT",
@@ -17,7 +17,7 @@
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
-    "@contextia/engine": "*",
+    "@sbr0nch/contextia-engine": "*",
     "@types/node": "^20.19.43",
     "esbuild": "^0.24.2",
     "typescript": "^5.6.3",

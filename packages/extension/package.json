@@ -1,8 +1,8 @@
 {
-  "name": "@contextia/extension",
+  "name": "@sbr0nch/contextia-extension",
   "version": "0.1.0",
   "private": true,
-  "description": "Contextia MV3 browser extension. Consumes @contextia/engine.",
+  "description": "Contextia MV3 browser extension. Consumes @sbr0nch/contextia-engine.",
   "license": "MIT",
   "scripts": {
     "build": "node build.mjs",
@@ -21,6 +21,6 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@contextia/engine": "*"
+    "@sbr0nch/contextia-engine": "*"
   }
 }

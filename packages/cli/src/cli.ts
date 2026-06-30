@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { detect, redact, detectors } from '@contextia/engine'
+import { detect, redact, detectors } from '@sbr0nch/contextia-engine'
 import { configFor, locate, maskValue, type ScanOptions } from './core.js'
 import { startProxy, type ProxyMode } from './proxy.js'
 

@@ -1,4 +1,4 @@
-import type { Config, Severity } from '@contextia/engine'
+import type { Config, Severity } from '@sbr0nch/contextia-engine'
 import { api } from './api.js'
 
 export type Mode = 'warn' | 'auto-redact' | 'block' | 'off'

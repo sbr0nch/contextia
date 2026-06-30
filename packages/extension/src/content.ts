@@ -1,4 +1,4 @@
-import { detect, redact, customFindings, type Config, type Finding } from '@contextia/engine'
+import { detect, redact, customFindings, type Config, type Finding } from '@sbr0nch/contextia-engine'
 import { findComposer, type Composer } from './composer.js'
 import { Hud } from './ui.js'
 import { api } from './api.js'

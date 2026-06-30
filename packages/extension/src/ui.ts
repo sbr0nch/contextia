@@ -1,4 +1,4 @@
-import type { Finding } from '@contextia/engine'
+import type { Finding } from '@sbr0nch/contextia-engine'
 import type { Composer } from './composer.js'
 import type { Mode } from './storage.js'
 import { mask } from './mask.js'

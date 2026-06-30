@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http'
-import { detect, redact, customFindings, detectors, type Config, type Finding, type CustomRules } from '@contextia/engine'
+import { detect, redact, customFindings, detectors, type Config, type Finding, type CustomRules } from '@sbr0nch/contextia-engine'
 
 export type ProxyMode = 'warn' | 'redact' | 'block'
 export type { CustomRules }

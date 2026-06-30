@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detect } from '@contextia/engine'
+import { detect } from '@sbr0nch/contextia-engine'
 import { configFor, lineCol, maskValue, locate } from '../src/core.js'
 
 describe('lineCol', () => {
