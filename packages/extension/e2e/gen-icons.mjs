@@ -7,10 +7,10 @@ const here = dirname(fileURLToPath(import.meta.url))
 const outDir = join(here, '..', 'public', 'icons')
 await mkdir(outDir, { recursive: true })
 
+// Brand mark: a green sparkle (echoing contextia.dev) on near-black.
 const svg = (s) => `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="28" fill="#16181d"/>
-  <path d="M64 18 L102 34 V66 C102 92 84 106 64 112 C44 106 26 92 26 66 V34 Z" fill="none" stroke="#ff4d4f" stroke-width="7"/>
-  <circle cx="64" cy="62" r="13" fill="#ff4d4f"/>
+  <rect width="128" height="128" rx="28" fill="#1a1a1a"/>
+  <path d="M64 16 C67 47 81 61 112 64 C81 67 67 81 64 112 C61 81 47 67 16 64 C47 61 61 47 64 16 Z" fill="#00D084"/>
 </svg>`
 
 const browser = await chromium.launch({

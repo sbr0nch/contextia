@@ -8,48 +8,55 @@ export interface UIHandlers {
   onAllowPattern: (finding: Finding) => void
 }
 
-const ACCENT = '#ff4d4f'
+// Brand palette (from contextia.dev): green accent on near-black. Red/amber are
+// reserved strictly for finding severity — danger should never read as "go".
+const BRAND = '#00D084'
+const DANGER = '#ff4d4f'
+const WARN = '#f5a623'
+const FONT = `'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif`
 
 const STYLE = `
 :host { all: initial; }
 .cx-indicator {
   position: fixed; right: 16px; bottom: 16px; z-index: 2147483646;
-  display: flex; align-items: center; gap: 6px;
-  font: 600 12px/1 ui-sans-serif, system-ui, sans-serif;
-  padding: 7px 10px; border-radius: 8px; cursor: pointer; user-select: none;
-  background: #16181d; color: #c9ccd3; border: 1px solid #2a2d36;
-  box-shadow: 0 4px 16px rgba(0,0,0,.4); transition: color .12s, border-color .12s;
+  display: flex; align-items: center; gap: 7px;
+  font: 600 12px/1 ${FONT}; letter-spacing: .02em;
+  padding: 8px 11px; border-radius: 8px; cursor: pointer; user-select: none;
+  background: #1a1a1a; color: #b8bbc2; border: 1px solid #2a2a2a;
+  box-shadow: 0 4px 16px rgba(0,0,0,.45); transition: color .12s, border-color .12s;
 }
-.cx-indicator.cx-alert { color: ${ACCENT}; border-color: ${ACCENT}; }
-.cx-dot { width: 8px; height: 8px; border-radius: 50%; background: #3a3f4b; }
-.cx-indicator.cx-alert .cx-dot { background: ${ACCENT}; box-shadow: 0 0 8px ${ACCENT}; }
+.cx-indicator.cx-alert { color: ${DANGER}; border-color: ${DANGER}; }
+.cx-dot { width: 8px; height: 8px; border-radius: 50%; background: ${BRAND}; box-shadow: 0 0 8px ${BRAND}55; }
+.cx-indicator.cx-alert .cx-dot { background: ${DANGER}; box-shadow: 0 0 8px ${DANGER}; }
 .cx-count { font-variant-numeric: tabular-nums; }
 .cx-popover {
   position: fixed; right: 16px; bottom: 58px; z-index: 2147483647;
   width: 320px; max-height: 50vh; overflow: auto;
-  background: #16181d; color: #d6d9e0; border: 1px solid #2a2d36; border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0,0,0,.5); font: 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+  background: #1a1a1a; color: #e8e8ea; border: 1px solid #2a2a2a; border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.55); font: 13px/1.4 ${FONT};
 }
 .cx-popover[hidden] { display: none; }
-.cx-head { padding: 10px 12px; border-bottom: 1px solid #2a2d36; display:flex; justify-content:space-between; align-items:center; }
+.cx-head { padding: 11px 13px; border-bottom: 1px solid #2a2a2a; display:flex; justify-content:space-between; align-items:center; }
 .cx-title { font-weight: 700; }
 .cx-redact-all {
-  background: ${ACCENT}; color: #0b0c0f; border: 0; border-radius: 6px;
-  padding: 5px 9px; font-weight: 700; cursor: pointer; font-size: 12px;
+  background: ${BRAND}; color: #08130d; border: 0; border-radius: 8px;
+  padding: 6px 11px; font-weight: 700; cursor: pointer; font-size: 12px;
 }
-.cx-row { padding: 9px 12px; border-bottom: 1px solid #21242c; }
+.cx-redact-all:hover { background: #00b070; }
+.cx-row { padding: 10px 13px; border-bottom: 1px solid #242424; }
 .cx-row:last-child { border-bottom: 0; }
 .cx-row-label { display:flex; align-items:center; gap:7px; }
 .cx-sev { width:7px; height:7px; border-radius:50%; }
-.cx-sev.critical { background:${ACCENT}; } .cx-sev.warning { background:#f5a623; }
-.cx-actions { margin-top:6px; display:flex; gap:8px; }
+.cx-sev.critical { background:${DANGER}; } .cx-sev.warning { background:${WARN}; }
+.cx-actions { margin-top:7px; display:flex; gap:8px; }
 .cx-actions button {
-  background:#21242c; color:#c9ccd3; border:1px solid #2f333d; border-radius:6px;
-  padding:3px 8px; font-size:11px; cursor:pointer;
+  background:#242424; color:#c9ccd3; border:1px solid #2a2a2a; border-radius:7px;
+  padding:4px 9px; font-size:11px; cursor:pointer;
 }
-.cx-actions button:hover { border-color:#3a3f4b; }
+.cx-actions button:hover { border-color:${BRAND}; color:${BRAND}; }
 .cx-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 2147483645; }
-.cx-underline { position: fixed; border-bottom: 2px solid ${ACCENT}; pointer-events: none; }
+.cx-underline { position: fixed; border-bottom: 2px solid ${DANGER}; pointer-events: none; }
+.cx-underline.warning { border-bottom-color: ${WARN}; }
 `
 
 export class Hud {
@@ -136,7 +143,7 @@ export class Hud {
       const range = rangeForOffsets(composer.el, f.start, f.end)
       if (!range) continue
       for (const rect of range.getClientRects()) {
-        const u = el('div', 'cx-underline')
+        const u = el('div', `cx-underline ${f.severity}`)
         u.style.left = `${rect.left}px`
         u.style.top = `${rect.bottom - 1}px`
         u.style.width = `${rect.width}px`
