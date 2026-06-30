@@ -26,6 +26,7 @@ async function init(): Promise<void> {
   settings = await getSettings()
   hud = new Hud({
     onRedactAll: () => doRedact('redacted'),
+    onRedactOne: (f) => doRedactOne(f),
     onAllowOnce: (f) => {
       sessionAllow.add(f.match)
       scan()
@@ -72,10 +73,44 @@ function scan(): void {
   const text = composer?.getText() ?? ''
   findings = text ? detect(text, effectiveConfig()) : []
   hud.setState(findings, composer, settings.mode)
+  updateSendButton()
   if (findings.length) {
     logNew(findings)
     if (settings.mode === 'auto-redact') doRedact('redacted')
   }
+}
+
+// In Block mode, dim the site's send button so it's clear why nothing happens.
+let dimmedButton: HTMLElement | null = null
+function updateSendButton(): void {
+  const shouldDim = settings.mode === 'block' && findings.length > 0
+  if (!shouldDim) {
+    if (dimmedButton) {
+      restoreButton(dimmedButton)
+      dimmedButton = null
+    }
+    return
+  }
+  const btn = document.querySelector<HTMLElement>('[data-testid="send-button"], button[type="submit"]')
+  if (!btn) return
+  if (dimmedButton && dimmedButton !== btn) restoreButton(dimmedButton)
+  btn.style.opacity = '0.45'
+  btn.style.cursor = 'not-allowed'
+  btn.title = 'Contextia: resolve the flagged secrets before sending'
+  dimmedButton = btn
+}
+function restoreButton(b: HTMLElement): void {
+  b.style.opacity = ''
+  b.style.cursor = ''
+  b.removeAttribute('title')
+}
+
+function doRedactOne(f: Finding): void {
+  if (!composer) return
+  composer.setText(redact(composer.getText(), [f]))
+  void bumpStats({ redacted: 1 })
+  void appendLog([entry(f, 'redacted')])
+  setTimeout(scan, 0)
 }
 
 function doRedact(action: LogAction): void {
@@ -116,6 +151,7 @@ function blockSubmit(e: Event): void {
   e.stopImmediatePropagation()
   void appendLog(findings.map((f) => entry(f, 'blocked')))
   hud.setState(findings, composer, settings.mode)
+  hud.flashBlocked(findings.length)
 }
 
 async function allowPattern(f: Finding): Promise<void> {
