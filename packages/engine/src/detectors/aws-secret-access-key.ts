@@ -3,7 +3,7 @@ import { matchAll } from './_util.js'
 
 // A bare 40-char base64 string is undetectable on its own. We only flag one when
 // an AWS access key id is present nearby — the paired form that actually leaks.
-const ACCESS_KEY_ID = /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|A3T[A-Z0-9])[A-Z0-9]{16}\b/
+const ACCESS_KEY_ID = /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|A3T[A-Z2-7])[A-Z2-7]{16}\b/
 const SECRET = /(?<![A-Za-z0-9/+])[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+])/g
 
 export const awsSecretAccessKey: Detector = {
@@ -18,7 +18,7 @@ export const awsSecretAccessKey: Detector = {
   fixtures: {
     positives: [
       'AKIAIOSFODNN7EXAMPLE secret=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
-      'ASIAJEXAMPLE7SIGNIN1 ' + 'a'.repeat(40),
+      'ASIAJ4ZEXAMPLE7QABCD ' + 'a'.repeat(40),
       'AKIAIOSFODNN7EXAMPLE ' + 'Ab3dEf01'.repeat(5),
     ],
     negatives: [

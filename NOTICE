@@ -12,6 +12,19 @@ The v1 detector patterns are clean-room re-derivations from publicly documented
 credential formats (vendor prefixes such as AKIA, ghp_, sk-ant-, AIza; PEM armor;
 RFC1918 ranges; RFC-style email/URI shapes). No detector regex was copied from a
 third-party project, so no third-party license attribution is required for v1.
+
+Precision techniques (per-charset entropy thresholds, noise/placeholder
+rejection, Base32 structural gating, exact vendor token shapes) were informed by
+the following permissively-licensed projects and official vendor documentation,
+and re-implemented clean-room (no code copied):
+  - gitleaks — MIT (verified): keyword/stopword-style filtering concept.
+  - detect-secrets (Yelp) — Apache-2.0 (verified): per-charset entropy thresholds
+    and sequential/UUID/repeat noise rejection.
+  - GitHub Docs / AWS IAM Docs — official format specifications (facts).
+TruffleHog (AGPL-3.0) was deliberately NOT used: its source was not consulted for
+reuse. The offline AWS Base32 structural check was derived from independent public
+security research, not from any AGPL source.
+
 Should a pattern later be adapted from a permissively-licensed project, add an
 entry here:
 
