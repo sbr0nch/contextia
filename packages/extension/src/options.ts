@@ -109,6 +109,31 @@ async function render(): Promise<void> {
   allowSection.append(valField, patField, save)
   app.append(allowSection)
 
+  // Custom "always redact" — the user's own sensitive data
+  const redactSection = el('div', 'cx-section')
+  redactSection.append(el('h2', '', 'Always redact (your data)'))
+  const rValField = el('div', 'cx-field')
+  rValField.append(el('label', '', 'Values to always redact (one per line)'))
+  const rValTa = document.createElement('textarea')
+  rValTa.value = settings.redactlist.values.join('\n')
+  rValField.append(rValTa)
+  const rPatField = el('div', 'cx-field')
+  rPatField.append(el('label', '', 'Patterns to always redact — regex (one per line)'))
+  const rPatTa = document.createElement('textarea')
+  rPatTa.value = settings.redactlist.patterns.join('\n')
+  rPatField.append(rPatTa)
+  const rSave = el('button', 'cx-primary', 'Save redaction list') as HTMLButtonElement
+  rSave.addEventListener('click', () =>
+    void persist({
+      redactlist: {
+        values: lines(rValTa.value),
+        patterns: lines(rPatTa.value),
+      },
+    }),
+  )
+  redactSection.append(rValField, rPatField, rSave)
+  app.append(redactSection)
+
   // Log
   const logSection = el('div', 'cx-section')
   logSection.append(el('h2', '', `Detections log (${log.length})`))

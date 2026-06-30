@@ -1,4 +1,4 @@
-import { detect, redact, type Config, type Finding } from '@contextia/engine'
+import { detect, redact, customFindings, type Config, type Finding } from '@contextia/engine'
 import { findComposer, type Composer } from './composer.js'
 import { Hud } from './ui.js'
 import { api } from './api.js'
@@ -81,13 +81,26 @@ function scan(): void {
   }
   composer = findComposer()
   const text = composer?.getText() ?? ''
-  findings = text ? detect(text, effectiveConfig()) : []
+  findings = text ? scanText(text) : []
   hud.setState(findings, composer, settings.mode)
   updateSendButton()
   if (findings.length) {
     logNew(findings)
     if (settings.mode === 'auto-redact') doRedact('redacted')
   }
+}
+
+// Detected secrets plus the user's own "always redact" values. A custom match is
+// dropped if a detector already covers the same span, and if it's been allowed.
+function scanText(text: string): Finding[] {
+  const detected = detect(text, effectiveConfig())
+  const custom = customFindings(text, settings.redactlist)
+  if (custom.length === 0) return detected
+  const covered = new Set(detected.map((f) => `${f.start}:${f.end}`))
+  const extra = custom.filter(
+    (f) => !covered.has(`${f.start}:${f.end}`) && !sessionAllow.has(f.match),
+  )
+  return [...detected, ...extra].sort((a, b) => a.start - b.start || b.end - a.end)
 }
 
 // In Block mode, dim the site's send button so it's clear why nothing happens.

@@ -14,6 +14,8 @@ export interface Settings {
   enabledDetectors: string[] | null
   severityOverrides: Record<string, Severity>
   allowlist: Allowlist
+  /** The user's own values/patterns to always flag and redact. */
+  redactlist: Allowlist
 }
 
 export type LogAction = 'flagged' | 'redacted' | 'allowed' | 'blocked'
@@ -39,6 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
   enabledDetectors: null,
   severityOverrides: {},
   allowlist: { values: [], patterns: [] },
+  redactlist: { values: [], patterns: [] },
 }
 
 const SETTINGS_KEY = 'settings'

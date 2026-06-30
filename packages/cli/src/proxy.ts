@@ -1,12 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http'
-import { detect, redact, detectors, type Config, type Finding } from '@contextia/engine'
+import { detect, redact, customFindings, detectors, type Config, type Finding, type CustomRules } from '@contextia/engine'
 
 export type ProxyMode = 'warn' | 'redact' | 'block'
-
-export interface CustomRules {
-  values: string[]
-  patterns: string[]
-}
+export type { CustomRules }
 
 export interface ProxyOptions {
   port: number
@@ -67,28 +63,6 @@ function* blockText(block: unknown): Generator<TextNode> {
 
 export function configFor(all?: boolean): Config {
   return all ? { enabledDetectors: detectors.map((d) => d.id) } : {}
-}
-
-// User-chosen values/patterns to always redact, on top of the detected secrets.
-function customFindings(text: string, custom: CustomRules): Finding[] {
-  const out: Finding[] = []
-  const add = (start: number, end: number, match: string): void => {
-    out.push({ id: `custom:${start}:${end}`, type: 'custom', label: 'Custom redaction', severity: 'critical', start, end, match, rationale: 'Matched a value you marked for redaction.' })
-  }
-  for (const v of custom.values) {
-    if (!v) continue
-    for (let i = text.indexOf(v); i !== -1; i = text.indexOf(v, i + v.length)) add(i, i + v.length, v)
-  }
-  for (const p of custom.patterns) {
-    let re: RegExp
-    try {
-      re = new RegExp(p, 'g')
-    } catch {
-      continue // skip an invalid user pattern rather than crash
-    }
-    for (const m of text.matchAll(re)) if (m[0]) add(m.index, m.index + m[0].length, m[0])
-  }
-  return out
 }
 
 /**

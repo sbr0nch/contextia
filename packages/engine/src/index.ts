@@ -2,4 +2,6 @@ export type { Severity, Finding, RawMatch, Detector, Allowlist, Config } from '.
 export { detect } from './detect.js'
 export { redact } from './redact.js'
 export type { RedactOptions } from './redact.js'
+export { customFindings } from './custom.js'
+export type { CustomRules } from './custom.js'
 export { detectors, detectorsById } from './detectors/index.js'
