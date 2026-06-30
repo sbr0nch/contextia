@@ -24,6 +24,12 @@ const REQUIRED_CRITICAL = [
   'private_key',
   'env_secret',
   'db_connection_string',
+  'gitlab_pat',
+  'npm_token',
+  'sendgrid_key',
+  'twilio_key',
+  'google_oauth_secret',
+  'shopify_token',
 ]
 
 // Warning detectors: implemented but OFF by default (SPEC §9). JWT is a warning,

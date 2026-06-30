@@ -16,6 +16,12 @@ import { genericHighEntropy } from './generic-high-entropy.js'
 import { internalHostname } from './internal-hostname.js'
 import { privateIp } from './private-ip.js'
 import { email } from './email.js'
+import { gitlabPat } from './gitlab-pat.js'
+import { npmToken } from './npm-token.js'
+import { sendgridKey } from './sendgrid-key.js'
+import { twilioKey } from './twilio-key.js'
+import { googleOauthSecret } from './google-oauth-secret.js'
+import { shopifyToken } from './shopify-token.js'
 
 /** The active detector registry. Add new detectors here. */
 export const detectors: Detector[] = [
@@ -31,6 +37,12 @@ export const detectors: Detector[] = [
   privateKey,
   envSecret,
   dbConnectionString,
+  gitlabPat,
+  npmToken,
+  sendgridKey,
+  twilioKey,
+  googleOauthSecret,
+  shopifyToken,
   jwt,
   genericHighEntropy,
   internalHostname,
