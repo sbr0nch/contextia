@@ -8,6 +8,7 @@ export const anthropicKey: Detector = {
   label: 'Anthropic API key',
   severity: 'critical',
   defaultEnabled: true,
+  rationale: 'An Anthropic API key grants billable access to your account — never paste it into a prompt.',
   scan: (text) => matchAll(RE, text),
   fixtures: {
     positives: [

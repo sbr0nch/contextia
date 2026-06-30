@@ -44,11 +44,12 @@ function cmdScan(): void {
     for (const f of locate(text, detect(text, config))) {
       total++
       if (json) {
-        rows.push({ file: name, line: f.line, col: f.col, type: f.type, severity: f.severity, preview: maskValue(f.match) })
+        rows.push({ file: name, line: f.line, col: f.col, type: f.type, severity: f.severity, preview: maskValue(f.match), rationale: f.rationale })
       } else {
         const loc = paint(COLOR.dim, `${name}:${f.line}:${f.col}`)
         const sev = paint(f.severity === 'critical' ? COLOR.critical : COLOR.warning, f.severity.padEnd(8))
         process.stdout.write(`${loc}  ${sev} ${f.type.padEnd(24)} ${maskValue(f.match)}\n`)
+        if (flags.has('--explain')) process.stdout.write(`${paint(COLOR.dim, '          why:')} ${f.rationale}\n`)
       }
     }
   }
@@ -127,6 +128,7 @@ Commands:
 Options:
   --all                Also enable the warning detectors (off by default)
   --json               (scan) machine-readable output
+  --explain            (scan) print why each match was flagged
   --mode <m>           (proxy) warn | redact | block        (default: redact)
   --port <n>           (proxy) listen port                  (default: 8787)
   --upstream <url>     (proxy) force upstream API base URL  (default: auto)

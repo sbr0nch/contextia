@@ -8,6 +8,7 @@ export const email: Detector = {
   label: 'Email address',
   severity: 'warning',
   defaultEnabled: false,
+  rationale: 'An email address is personal data (PII) — redact it if the recipient should not see it.',
   scan: (text) => matchAll(RE, text),
   fixtures: {
     positives: ['john.doe@example.com', 'a_b+c@mail.co.uk', 'user@sub.domain.org'],

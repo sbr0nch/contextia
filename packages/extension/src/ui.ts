@@ -87,7 +87,8 @@ const STYLE = `
 }
 .cx-tip.cx-on { transform: none; }
 .cx-tip-label { display:flex; align-items:center; gap:7px; font-weight:600; }
-.cx-tip-prev { color:#7f8492; font:11px/1.4 ui-monospace, monospace; margin:6px 0 9px; }
+.cx-tip-prev { color:#7f8492; font:11px/1.4 ui-monospace, monospace; margin:6px 0 6px; }
+.cx-tip-why { color:#9aa0ad; font-size:11px; line-height:1.45; margin:0 0 9px; }
 .cx-tip-act { display:flex; gap:7px; }
 
 .cx-banner {
@@ -247,7 +248,7 @@ export class Hud {
       this.hideTip()
     })
     act.append(redact, allow)
-    this.tooltip.append(head, el('div', 'cx-tip-prev', mask(f.match)), act)
+    this.tooltip.append(head, el('div', 'cx-tip-prev', mask(f.match)), el('div', 'cx-tip-why', f.rationale), act)
 
     const top = Math.max(8, rect.top - 92)
     const left = Math.min(Math.max(8, rect.left), window.innerWidth - 262)

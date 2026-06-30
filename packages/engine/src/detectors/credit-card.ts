@@ -10,6 +10,7 @@ export const creditCard: Detector = {
   label: 'Credit card number',
   severity: 'warning',
   defaultEnabled: false,
+  rationale: 'A Luhn-valid card number. Sharing payment data with an AI assistant risks PCI exposure.',
   scan(text) {
     const out: RawMatch[] = []
     for (const m of text.matchAll(CANDIDATE)) {

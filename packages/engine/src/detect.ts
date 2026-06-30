@@ -28,6 +28,12 @@ export function sortFindings(findings: Finding[]): Finding[] {
 // cost predictable and is the ReDoS backstop together with linear-time patterns.
 const MAX_INPUT = 1_000_000
 
+function defaultRationale(severity: Finding['severity'], label: string): string {
+  return severity === 'critical'
+    ? `${label} looks like a live credential — sharing it with an AI assistant could leak access.`
+    : `${label} may be sensitive — review before sending.`
+}
+
 export function detect(text: string, config: Config = {}): Finding[] {
   const scanned = text.length > MAX_INPUT ? text.slice(0, MAX_INPUT) : text
   const enabled = resolveEnabled(config)
@@ -46,6 +52,7 @@ export function detect(text: string, config: Config = {}): Finding[] {
         start: m.start,
         end: m.end,
         match: m.match,
+        rationale: d.rationale ?? defaultRationale(severity, d.label),
       })
     }
   }

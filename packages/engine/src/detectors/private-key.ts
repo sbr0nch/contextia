@@ -11,6 +11,7 @@ export const privateKey: Detector = {
   label: 'Private key block',
   severity: 'critical',
   defaultEnabled: true,
+  rationale: 'A PEM private key authenticates as you — anyone who reads it can impersonate the key holder.',
   scan(text: string): RawMatch[] {
     const out: RawMatch[] = []
     for (const m of text.matchAll(BLOCK)) {

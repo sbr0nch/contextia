@@ -20,6 +20,7 @@ export const iban: Detector = {
   label: 'IBAN',
   severity: 'warning',
   defaultEnabled: false,
+  rationale: 'A checksum-valid bank account number (IBAN) — treat as personal financial data.',
   scan(text) {
     const out: RawMatch[] = []
     for (const m of text.matchAll(CANDIDATE)) {

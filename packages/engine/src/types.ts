@@ -14,6 +14,8 @@ export interface Finding {
   end: number
   /** The matched substring. This IS the secret — never persist it. */
   match: string
+  /** Why this was flagged — safe to show/persist (contains no secret value). */
+  rationale: string
 }
 
 /** A raw match from a detector, before the engine assigns identity/severity. */
@@ -25,6 +27,9 @@ export interface Detector {
   severity: Severity
   /** Runs unless a Config narrows the enabled set. */
   defaultEnabled: boolean
+  /** Why a match matters — shown to the user. Falls back to a severity-based
+   *  default when omitted. Must never contain a secret value. */
+  rationale?: string
   /** Pure, deterministic: return every match in `text`. */
   scan(text: string): RawMatch[]
   /** Positives MUST match; negatives MUST NOT. Append-only — never weaken. */

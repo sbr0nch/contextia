@@ -10,6 +10,7 @@ export const githubToken: Detector = {
   label: 'GitHub token',
   severity: 'critical',
   defaultEnabled: true,
+  rationale: 'A GitHub token can read or push to your repositories — revoke it if it leaks.',
   scan: (text) => matchAll(RE, text),
   fixtures: {
     positives: [

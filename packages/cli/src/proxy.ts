@@ -73,7 +73,7 @@ export function configFor(all?: boolean): Config {
 function customFindings(text: string, custom: CustomRules): Finding[] {
   const out: Finding[] = []
   const add = (start: number, end: number, match: string): void => {
-    out.push({ id: `custom:${start}:${end}`, type: 'custom', label: 'Custom redaction', severity: 'critical', start, end, match })
+    out.push({ id: `custom:${start}:${end}`, type: 'custom', label: 'Custom redaction', severity: 'critical', start, end, match, rationale: 'Matched a value you marked for redaction.' })
   }
   for (const v of custom.values) {
     if (!v) continue

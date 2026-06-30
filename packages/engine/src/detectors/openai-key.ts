@@ -10,6 +10,7 @@ export const openaiKey: Detector = {
   label: 'OpenAI API key',
   severity: 'critical',
   defaultEnabled: true,
+  rationale: 'An OpenAI API key grants billable access to your account — never paste it into a prompt.',
   scan: (text) => matchAll(RE, text),
   fixtures: {
     positives: [
