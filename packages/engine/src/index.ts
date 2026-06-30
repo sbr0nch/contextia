@@ -1,0 +1,5 @@
+export type { Severity, Finding, RawMatch, Detector, Allowlist, Config } from './types.js'
+export { detect } from './detect.js'
+export { redact } from './redact.js'
+export type { RedactOptions } from './redact.js'
+export { detectors, detectorsById } from './detectors/index.js'

@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Contextia",
+  "version": "0.0.0",
+  "description": "Catch secrets before they reach an AI chat. Local, on-device, no network.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://chatgpt.com/*", "https://claude.ai/*"],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*", "https://claude.ai/*"],
+      "js": ["src/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Contextia"
+  }
+}

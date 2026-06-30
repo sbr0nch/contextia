@@ -1,0 +1,17 @@
+Contextia
+Copyright (c) 2026 Contextia
+
+This product includes detection patterns adapted from third-party,
+permissively-licensed projects. Each adapted pattern is recorded below with its
+upstream source and license. Patterns are only adapted from permissively-licensed
+sources (e.g. MIT, Apache-2.0); the license of each source is verified before use.
+
+Third-party pattern sources
+----------------------------
+(none yet — entries are added as patterns are adapted, one per source)
+
+Format for each entry:
+  - Detector:   <detector id>
+    Source:     <project name and URL>
+    License:    <SPDX identifier> (verified <date>)
+    Notes:      <what was adapted; clean-room re-derivation vs verbatim>

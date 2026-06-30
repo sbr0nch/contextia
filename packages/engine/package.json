@@ -1,0 +1,31 @@
+{
+  "name": "@contextia/engine",
+  "version": "0.0.0",
+  "description": "Environment-agnostic secret detection engine. No DOM, no network, dependency-light.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "acceptance": "vitest run --config vitest.acceptance.config.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  }
+}

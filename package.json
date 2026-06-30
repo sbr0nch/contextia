@@ -1,0 +1,21 @@
+{
+  "name": "contextia",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local, on-device detection of secrets in text before it is sent to an AI chat assistant.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/engine",
+    "packages/extension"
+  ],
+  "scripts": {
+    "test": "npm run test --workspace @contextia/engine",
+    "acceptance": "npm run acceptance --workspace @contextia/engine",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
