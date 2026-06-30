@@ -14,6 +14,7 @@ export interface ProxyOptions {
   upstream?: string | undefined
   all?: boolean | undefined
   custom?: CustomRules | undefined
+  reversible?: boolean | undefined
   onFinding?: ((findings: Finding[], info: { path: string }) => void) | undefined
 }
 
@@ -90,18 +91,47 @@ function customFindings(text: string, custom: CustomRules): Finding[] {
   return out
 }
 
-/** Scan (and, in redact mode, rewrite in place) the user text in a request body. */
-export function processPayload(body: unknown, mode: ProxyMode, config: Config, custom?: CustomRules): Finding[] {
+/**
+ * Scan and, in redact mode, rewrite the user text in place. When a `vault` is
+ * given (reversible mode), each secret is replaced with a unique token and the
+ * token→original mapping is recorded, so the LLM's response can be restored.
+ */
+export function processPayload(
+  body: unknown,
+  mode: ProxyMode,
+  config: Config,
+  custom?: CustomRules,
+  vault?: Map<string, string>,
+): Finding[] {
   const findings: Finding[] = []
   for (const node of textNodes(body)) {
     const text = node.get()
     const found = [...detect(text, config), ...(custom ? customFindings(text, custom) : [])]
     if (found.length) {
       findings.push(...found)
-      if (mode === 'redact') node.set(redact(text, found))
+      if (mode === 'redact') {
+        node.set(
+          vault
+            ? redact(text, found, {
+                token: (f) => {
+                  const t = `⟨cx:${vault.size + 1}⟩`
+                  vault.set(t, f.match)
+                  return t
+                },
+              })
+            : redact(text, found),
+        )
+      }
     }
   }
   return findings
+}
+
+/** Restore original values in the LLM's response (reversible mode). */
+export function detokenize(text: string, vault: Map<string, string>): string {
+  let out = text
+  for (const [token, original] of vault) out = out.split(token).join(original)
+  return out
 }
 
 export function resolveUpstream(url: string, configured?: string): string {
@@ -152,12 +182,14 @@ async function handle(
   let body = Buffer.concat(chunks)
   stats.requests++
 
+  const vault = opts.reversible && opts.mode === 'redact' ? new Map<string, string>() : undefined
+
   if (body.length > MAX_SCAN_BODY) {
     process.stderr.write(`contextia: request body ${body.length} B exceeds scan cap — forwarded unscanned\n`)
   } else if ((req.method === 'POST' || req.method === 'PUT') && body.length > 0) {
     try {
       const json: unknown = JSON.parse(body.toString('utf8'))
-      const findings = processPayload(json, opts.mode, config, opts.custom)
+      const findings = processPayload(json, opts.mode, config, opts.custom, vault)
       if (findings.length > 0) {
         stats.withFindings++
         for (const f of findings) stats.byType[f.type] = (stats.byType[f.type] ?? 0) + 1
@@ -211,6 +243,16 @@ async function handle(
   upstreamRes.headers.forEach((value, key) => {
     if (key !== 'content-encoding' && key !== 'content-length') outHeaders[key] = value
   })
+
+  // Reversible mode: buffer the response and restore the originals so the LLM's
+  // answer is usable. (Trades streaming for round-trip restoration.)
+  if (vault && vault.size > 0) {
+    const restored = detokenize(await upstreamRes.text(), vault)
+    res.writeHead(upstreamRes.status, outHeaders)
+    res.end(restored)
+    return
+  }
+
   res.writeHead(upstreamRes.status, outHeaders)
   if (upstreamRes.body) {
     for await (const chunk of upstreamRes.body as unknown as AsyncIterable<Uint8Array>) res.write(chunk)

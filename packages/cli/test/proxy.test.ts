@@ -112,6 +112,32 @@ describe('proxy server (against a mock upstream)', () => {
     })
   })
 
+  it('reversible mode tokenizes the request and restores the original in the response', async () => {
+    // an upstream that echoes the (tokenized) request body back as its "answer"
+    const echo = createServer(async (req, res) => {
+      const ch: Buffer[] = []
+      for await (const c of req) ch.push(c as Buffer)
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(Buffer.concat(ch))
+    })
+    const echoPort = await listen(echo)
+    const proxy = createProxyServer({ port: 0, mode: 'redact', reversible: true, upstream: `http://localhost:${echoPort}` })
+    const port = await listen(proxy)
+    try {
+      const res = await fetch(`http://localhost:${port}/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: SECRET_BODY('use AKIAIOSFODNN7EXAMPLE here'),
+      })
+      const text = await res.text()
+      expect(text).toContain('AKIAIOSFODNN7EXAMPLE') // restored on the way back
+      expect(text).not.toContain('⟨cx:') // no leftover placeholders
+    } finally {
+      await close(proxy)
+      await close(echo)
+    }
+  })
+
   it('forwards clean requests untouched', async () => {
     await withProxy('redact', async (port) => {
       const res = await fetch(`http://localhost:${port}/v1/messages`, {

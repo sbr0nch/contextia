@@ -89,6 +89,7 @@ function cmdProxy(): void {
     upstream: flagValue('--upstream'),
     all: flags.has('--all'),
     custom,
+    reversible: flags.has('--reversible'),
     onFinding: (f, info) => {
       const verb = mode === 'block' ? 'BLOCKED' : mode === 'redact' ? 'redacted' : 'flagged'
       const types = [...new Set(f.map((x) => x.type))].join(', ')
@@ -131,6 +132,8 @@ Options:
   --upstream <url>     (proxy) force upstream API base URL  (default: auto)
   --redact-file <p>    (proxy) JSON { "values": [], "patterns": [] } of your own
                        data to always redact, on top of detected secrets
+  --reversible         (proxy, redact mode) restore the original values in the
+                       LLM's response via a local vault (buffers the response)
 
 Examples:
   contextia scan .env src/                       # check files for secrets
