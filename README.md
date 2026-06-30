@@ -4,6 +4,7 @@
 other credentials *before* they reach an AI assistant — in your terminal and in
 your browser. Everything runs on-device.
 
+[![CI](https://github.com/sbr0nch/contextia/actions/workflows/ci.yml/badge.svg)](https://github.com/sbr0nch/contextia/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@sbr0nch/contextia?label=%40sbr0nch%2Fcontextia)](https://www.npmjs.com/package/@sbr0nch/contextia)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 [![zero network](https://img.shields.io/badge/network-zero%20requests-00D084)](#privacy)
