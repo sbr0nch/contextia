@@ -91,7 +91,7 @@ function updateSendButton(): void {
     }
     return
   }
-  const btn = document.querySelector<HTMLElement>('[data-testid="send-button"], button[type="submit"]')
+  const btn = findSendButton()
   if (!btn) return
   if (dimmedButton && dimmedButton !== btn) restoreButton(dimmedButton)
   btn.style.opacity = '0.45'
@@ -138,12 +138,39 @@ function onSubmit(e: Event): void {
   blockSubmit(e)
 }
 
+// Resilient, selector-agnostic send-button detection: combine several weak
+// signals so a site redesign (renamed testid, moved button) doesn't break it.
+// Enter-key blocking works regardless of any of this.
+const SEND_HINT = /\b(send|submit)\b|invia|enviar|senden|envoyer|送信|发送|보내기/i
+
+function scoreSendButton(b: Element): number {
+  let s = 0
+  const testid = (b.getAttribute('data-testid') ?? '').toLowerCase()
+  const aria = `${b.getAttribute('aria-label') ?? ''} ${b.getAttribute('title') ?? ''}`.toLowerCase()
+  if (testid.includes('send')) s += 4
+  if (b instanceof HTMLButtonElement && b.type === 'submit') s += 3
+  if (SEND_HINT.test(aria)) s += 3
+  if (b.querySelector('svg') && !(b.textContent ?? '').trim()) s += 1
+  return s
+}
+
+function findSendButton(): HTMLElement | null {
+  const scope: ParentNode = composer?.el.closest('form') ?? document
+  let best: HTMLElement | null = null
+  let bestScore = 2 // require a real signal, not just "some button"
+  for (const b of scope.querySelectorAll<HTMLElement>('button, [role="button"]')) {
+    const s = scoreSendButton(b)
+    if (s > bestScore) {
+      bestScore = s
+      best = b
+    }
+  }
+  return best
+}
+
 function isSendTarget(target: EventTarget | null): boolean {
-  const el = target instanceof Element ? target.closest('button, [role="button"]') : null
-  if (!el) return false
-  if (el.matches('[data-testid="send-button"], button[type="submit"]')) return true
-  const hint = `${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('data-testid') ?? ''}`.toLowerCase()
-  return /\bsend\b|invia|submit/.test(hint)
+  const b = target instanceof Element ? target.closest('button, [role="button"]') : null
+  return !!b && scoreSendButton(b) >= 3
 }
 
 function blockSubmit(e: Event): void {

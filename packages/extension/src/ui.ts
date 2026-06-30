@@ -11,73 +11,94 @@ export interface UIHandlers {
 
 // Brand palette (contextia.dev): green identity; red/amber strictly for severity.
 const BRAND = '#00D084'
-const DANGER = '#ff4d4f'
+const DANGER = '#ff5d5f'
 const WARN = '#f5a623'
 const FONT = `'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif`
+const EASE = 'cubic-bezier(.2,.8,.2,1)'
 
 const STYLE = `
 :host { all: initial; }
-.cx-indicator {
-  position: fixed; right: 16px; bottom: 16px; z-index: 2147483646;
-  display: flex; align-items: center; gap: 7px;
-  font: 600 12px/1 ${FONT}; letter-spacing: .02em;
-  padding: 8px 11px; border-radius: 8px; cursor: pointer; user-select: none;
-  background: #1a1a1a; color: #b8bbc2; border: 1px solid #2a2a2a;
-  box-shadow: 0 4px 16px rgba(0,0,0,.45); transition: color .12s, border-color .12s;
-}
-.cx-indicator.cx-alert { color: ${DANGER}; border-color: ${DANGER}; }
-.cx-indicator.cx-blocked { color: ${DANGER}; border-color: ${DANGER}; background:#241416; }
-.cx-dot { width: 8px; height: 8px; border-radius: 50%; background: ${BRAND}; box-shadow: 0 0 8px ${BRAND}55; }
-.cx-indicator.cx-alert .cx-dot, .cx-indicator.cx-blocked .cx-dot { background: ${DANGER}; box-shadow: 0 0 8px ${DANGER}; }
-.cx-count { font-variant-numeric: tabular-nums; }
 
-.cx-popover {
-  position: fixed; right: 16px; bottom: 58px; z-index: 2147483647;
-  width: 330px; max-height: 50vh; overflow: auto;
-  background: #1a1a1a; color: #e8e8ea; border: 1px solid #2a2a2a; border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0,0,0,.55); font: 13px/1.4 ${FONT};
+/* frosted-glass surface shared by the floating panels */
+.glass {
+  background: rgba(18,18,20,.66);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid rgba(255,255,255,.09);
+  box-shadow: 0 8px 30px rgba(0,0,0,.42);
 }
-.cx-popover[hidden] { display: none; }
-.cx-head { padding: 11px 13px; border-bottom: 1px solid #2a2a2a; display:flex; justify-content:space-between; align-items:center; }
-.cx-title { font-weight: 700; }
-.cx-redact-all { background: ${BRAND}; color: #08130d; border: 0; border-radius: 8px; padding: 6px 11px; font-weight: 700; cursor: pointer; font-size: 12px; }
-.cx-redact-all:hover { background: #00b070; }
-.cx-row { padding: 10px 13px; border-bottom: 1px solid #242424; }
-.cx-row:last-child { border-bottom: 0; }
-.cx-row-top { display:flex; align-items:center; gap:7px; justify-content:space-between; }
+
+.cx-indicator {
+  position: fixed; right: 14px; bottom: 14px; z-index: 2147483646;
+  display: flex; align-items: center; gap: 6px;
+  font: 600 11px/1 ${FONT}; letter-spacing: .02em;
+  padding: 6px 9px; border-radius: 999px; cursor: pointer; user-select: none;
+  color: #c4c7cf; transition: color .16s ${EASE}, border-color .16s ${EASE}, transform .12s ${EASE};
+}
+.cx-indicator:hover { transform: translateY(-1px); }
+.cx-indicator:active { transform: translateY(0); }
+.cx-indicator.cx-alert { color: ${DANGER}; border-color: rgba(255,93,95,.55); }
+.cx-indicator.cx-blocked { color: ${DANGER}; border-color: rgba(255,93,95,.7); background: rgba(40,20,21,.66); }
+.cx-dot { width: 6px; height: 6px; border-radius: 50%; background: ${BRAND}; box-shadow: 0 0 7px ${BRAND}88; transition: background .16s ${EASE}; }
+.cx-indicator.cx-alert .cx-dot, .cx-indicator.cx-blocked .cx-dot { background: ${DANGER}; box-shadow: 0 0 7px ${DANGER}; }
+.cx-count { font-variant-numeric: tabular-nums; opacity: .9; }
+
+/* animated open/close for the floating panels */
+.cx-pop, .cx-tip, .cx-banner {
+  opacity: 0; pointer-events: none;
+  transition: opacity .17s ${EASE}, transform .17s ${EASE};
+}
+.cx-pop.cx-on, .cx-tip.cx-on, .cx-banner.cx-on { opacity: 1; pointer-events: auto; }
+
+.cx-pop {
+  position: fixed; right: 14px; bottom: 52px; z-index: 2147483647;
+  width: 300px; max-height: 52vh; overflow: auto; color: #e9eaee;
+  border-radius: 14px; font: 12px/1.45 ${FONT};
+  transform-origin: bottom right; transform: translateY(8px) scale(.96);
+}
+.cx-pop.cx-on { transform: none; }
+.cx-head { padding: 12px 13px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,.06); }
+.cx-title { font-weight: 700; font-size: 12px; }
+.cx-go { background: ${BRAND}; color: #08130d; border: 0; border-radius: 8px; padding: 5px 10px; font-weight: 700; cursor: pointer; font-size: 11px; transition: background .14s ${EASE}; }
+.cx-go:hover { background: #19e08f; }
+.cx-row { padding: 11px 13px; }
+.cx-row + .cx-row { border-top: 1px solid rgba(255,255,255,.05); }
+.cx-row-top { display:flex; align-items:center; gap:8px; justify-content:space-between; }
 .cx-row-label { display:flex; align-items:center; gap:7px; min-width:0; }
-.cx-row-label span.cx-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.cx-preview { color:#8b90a0; font:11px/1.4 ui-monospace, monospace; margin-top:3px; }
-.cx-sev { width:7px; height:7px; border-radius:50%; flex:0 0 auto; }
+.cx-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cx-prev { color:#7f8492; font:11px/1.4 ui-monospace, monospace; margin-top:4px; }
+.cx-sev { width:6px; height:6px; border-radius:50%; flex:0 0 auto; }
 .cx-sev.critical { background:${DANGER}; } .cx-sev.warning { background:${WARN}; }
-.cx-actions { margin-top:7px; display:flex; gap:8px; }
-.cx-actions button { background:#242424; color:#c9ccd3; border:1px solid #2a2a2a; border-radius:7px; padding:4px 9px; font-size:11px; cursor:pointer; }
-.cx-actions button:hover { border-color:${BRAND}; color:${BRAND}; }
-.cx-mini { background:${BRAND}; color:#08130d; border:0; border-radius:6px; padding:3px 8px; font-size:11px; font-weight:700; cursor:pointer; }
+.cx-row-act { margin-top:8px; display:flex; gap:7px; }
+.cx-ghost { background: rgba(255,255,255,.05); color:#c4c7cf; border:1px solid rgba(255,255,255,.08); border-radius:7px; padding:4px 9px; font-size:11px; cursor:pointer; transition: all .14s ${EASE}; }
+.cx-ghost:hover { border-color:${BRAND}; color:${BRAND}; }
+.cx-mini { background:${BRAND}; color:#08130d; border:0; border-radius:7px; padding:4px 9px; font-size:11px; font-weight:700; cursor:pointer; }
 
 .cx-overlay { position: fixed; inset: 0; pointer-events: none; z-index: 2147483645; }
-.cx-hl { position: fixed; pointer-events: none; border-radius: 2px; border-bottom: 2px solid ${DANGER}; background: ${DANGER}22; }
-.cx-hl.warning { border-bottom-color: ${WARN}; background: ${WARN}22; }
+.cx-hl { position: fixed; pointer-events: none; border-radius: 3px; border-bottom: 2px solid ${DANGER}; background: ${DANGER}1f; transition: background .12s ${EASE}; }
+.cx-hl.warning { border-bottom-color: ${WARN}; background: ${WARN}1f; }
 .cx-hit { position: fixed; pointer-events: auto; cursor: help; background: transparent; }
 
-.cx-tooltip {
-  position: fixed; z-index: 2147483647; max-width: 280px;
-  background:#1a1a1a; color:#e8e8ea; border:1px solid #2a2a2a; border-radius:10px;
-  box-shadow:0 8px 24px rgba(0,0,0,.5); padding:9px 11px; font:12px/1.4 ${FONT};
+.cx-tip {
+  position: fixed; z-index: 2147483647; max-width: 250px; color:#e9eaee;
+  border-radius: 11px; padding: 9px 11px; font: 11px/1.45 ${FONT};
+  transform: scale(.97);
 }
-.cx-tooltip[hidden] { display:none; }
-.cx-tt-label { display:flex; align-items:center; gap:7px; font-weight:600; }
-.cx-tt-prev { color:#8b90a0; font:11px/1.4 ui-monospace, monospace; margin:5px 0 8px; }
-.cx-tt-actions { display:flex; gap:7px; }
+.cx-tip.cx-on { transform: none; }
+.cx-tip-label { display:flex; align-items:center; gap:7px; font-weight:600; }
+.cx-tip-prev { color:#7f8492; font:11px/1.4 ui-monospace, monospace; margin:6px 0 9px; }
+.cx-tip-act { display:flex; gap:7px; }
 
 .cx-banner {
-  position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%);
-  z-index: 2147483647; display:flex; align-items:center; gap:12px;
-  background:#241416; color:#ffd7d8; border:1px solid ${DANGER}; border-radius:10px;
-  padding:10px 14px; font:600 13px/1 ${FONT}; box-shadow:0 8px 28px rgba(0,0,0,.55);
+  position: fixed; left: 50%; bottom: 58px; z-index: 2147483647;
+  display:flex; align-items:center; gap:12px; color:#ffd9da;
+  background: rgba(40,20,21,.72); border:1px solid rgba(255,93,95,.6); border-radius:12px;
+  padding:9px 13px; font:600 12px/1 ${FONT};
+  -webkit-backdrop-filter: blur(16px) saturate(150%); backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: 0 10px 32px rgba(0,0,0,.5);
+  transform: translateX(-50%) translateY(8px);
 }
-.cx-banner[hidden] { display:none; }
-.cx-banner .cx-redact-all { padding:5px 10px; }
+.cx-banner.cx-on { transform: translateX(-50%); }
 `
 
 export class Hud {
@@ -91,8 +112,8 @@ export class Hud {
   private tooltip!: HTMLElement
   private banner!: HTMLElement
   private open = false
-  private hideTooltipTimer: ReturnType<typeof setTimeout> | undefined
-  private hideBannerTimer: ReturnType<typeof setTimeout> | undefined
+  private tipTimer: ReturnType<typeof setTimeout> | undefined
+  private bannerTimer: ReturnType<typeof setTimeout> | undefined
 
   constructor(private handlers: UIHandlers) {
     this.host = document.createElement('div')
@@ -106,20 +127,17 @@ export class Hud {
     this.root.appendChild(style)
 
     this.overlay = el('div', 'cx-overlay')
-    this.indicator = el('div', 'cx-indicator')
+    this.indicator = el('div', 'cx-indicator glass')
     this.label = el('span', '', 'Contextia')
     this.countEl = el('span', 'cx-count')
     this.indicator.append(el('span', 'cx-dot'), this.label, this.countEl)
     this.indicator.addEventListener('click', () => this.setOpen(!this.open))
 
-    this.popover = el('div', 'cx-popover')
-    this.popover.hidden = true
-    this.tooltip = el('div', 'cx-tooltip')
-    this.tooltip.hidden = true
-    this.tooltip.addEventListener('mouseenter', () => this.cancelTooltipHide())
-    this.tooltip.addEventListener('mouseleave', () => this.scheduleTooltipHide())
+    this.popover = el('div', 'cx-pop glass')
+    this.tooltip = el('div', 'cx-tip glass')
+    this.tooltip.addEventListener('mouseenter', () => this.cancelTip())
+    this.tooltip.addEventListener('mouseleave', () => this.scheduleTipHide())
     this.banner = el('div', 'cx-banner')
-    this.banner.hidden = true
 
     this.root.append(this.overlay, this.indicator, this.popover, this.tooltip, this.banner)
     document.body.appendChild(this.host)
@@ -136,35 +154,30 @@ export class Hud {
     this.drawHighlights(findings, composer)
     if (!has) {
       this.setOpen(false)
-      this.hideTooltip()
+      this.hideTip()
       this.hideBanner()
     }
   }
 
-  /** Visible confirmation that a send was just blocked. */
   flashBlocked(count: number): void {
-    this.banner.replaceChildren()
-    this.banner.append(
-      el('span', '', `Send blocked — ${count} secret${count > 1 ? 's' : ''} to resolve`),
-    )
-    const btn = el('button', 'cx-redact-all', 'Redact all') as HTMLButtonElement
+    this.banner.replaceChildren(el('span', '', `Send blocked — ${count} secret${count > 1 ? 's' : ''} to resolve`))
+    const btn = el('button', 'cx-go', 'Redact all') as HTMLButtonElement
     btn.addEventListener('click', () => {
       this.handlers.onRedactAll()
       this.hideBanner()
     })
     this.banner.append(btn)
-    this.banner.hidden = false
-    if (this.hideBannerTimer) clearTimeout(this.hideBannerTimer)
-    this.hideBannerTimer = setTimeout(() => this.hideBanner(), 4000)
+    this.banner.classList.add('cx-on')
+    if (this.bannerTimer) clearTimeout(this.bannerTimer)
+    this.bannerTimer = setTimeout(() => this.hideBanner(), 4200)
   }
-
   private hideBanner(): void {
-    this.banner.hidden = true
+    this.banner.classList.remove('cx-on')
   }
 
   private setOpen(open: boolean): void {
     this.open = open
-    this.popover.hidden = !open
+    this.popover.classList.toggle('cx-on', open)
   }
 
   private renderPopover(findings: Finding[]): void {
@@ -172,9 +185,9 @@ export class Hud {
     if (findings.length === 0) return
     const head = el('div', 'cx-head')
     head.append(el('span', 'cx-title', `${findings.length} secret${findings.length > 1 ? 's' : ''} detected`))
-    const redactAll = el('button', 'cx-redact-all', 'Redact all') as HTMLButtonElement
-    redactAll.addEventListener('click', () => this.handlers.onRedactAll())
-    head.append(redactAll)
+    const go = el('button', 'cx-go', 'Redact all') as HTMLButtonElement
+    go.addEventListener('click', () => this.handlers.onRedactAll())
+    head.append(go)
     this.popover.append(head)
 
     for (const f of findings) {
@@ -185,21 +198,21 @@ export class Hud {
       const redact = el('button', 'cx-mini', 'Redact') as HTMLButtonElement
       redact.addEventListener('click', () => this.handlers.onRedactOne(f))
       top.append(lbl, redact)
-      const preview = el('div', 'cx-preview', mask(f.match))
-      const actions = el('div', 'cx-actions')
-      const once = el('button', '', 'Allow once') as HTMLButtonElement
+      const act = el('div', 'cx-row-act')
+      const once = el('button', 'cx-ghost', 'Allow once') as HTMLButtonElement
       once.addEventListener('click', () => this.handlers.onAllowOnce(f))
-      const pat = el('button', '', 'Allow pattern') as HTMLButtonElement
+      const pat = el('button', 'cx-ghost', 'Allow pattern') as HTMLButtonElement
       pat.addEventListener('click', () => this.handlers.onAllowPattern(f))
-      actions.append(once, pat)
-      row.append(top, preview, actions)
+      act.append(once, pat)
+      row.append(top, el('div', 'cx-prev', mask(f.match)), act)
       this.popover.append(row)
     }
   }
 
   private drawHighlights(findings: Finding[], composer: Composer | null): void {
     this.overlay.replaceChildren()
-    if (!composer || composer.isTextarea) return // textarea substrings aren't measurable
+    this.scheduleTipHide() // a redraw shouldn't leave a stale tooltip pinned
+    if (!composer || composer.isTextarea) return
     for (const f of findings) {
       const range = rangeForOffsets(composer.el, f.start, f.end)
       if (!range) continue
@@ -207,56 +220,50 @@ export class Hud {
         const hl = el('div', `cx-hl ${f.severity}`)
         place(hl, rect.left, rect.top, rect.width, rect.height)
         this.overlay.appendChild(hl)
-        // thin hover strip at the baseline so the tooltip never blocks typing
         const hit = el('div', 'cx-hit')
-        place(hit, rect.left, rect.bottom - 6, rect.width, 8)
-        hit.addEventListener('mouseenter', () => this.showTooltip(f, rect))
-        hit.addEventListener('mouseleave', () => this.scheduleTooltipHide())
+        place(hit, rect.left, rect.bottom - 6, rect.width, 9)
+        hit.addEventListener('mouseenter', () => this.showTip(f, rect))
+        hit.addEventListener('mouseleave', () => this.scheduleTipHide())
         this.overlay.appendChild(hit)
       }
     }
   }
 
-  private showTooltip(f: Finding, rect: DOMRect): void {
-    this.cancelTooltipHide()
+  private showTip(f: Finding, rect: DOMRect): void {
+    this.cancelTip()
     this.tooltip.replaceChildren()
-    const head = el('div', 'cx-tt-label')
-    head.append(el('span', `cx-sev ${f.severity}`), el('span', '', `${f.label} (${f.severity})`))
-    const prev = el('div', 'cx-tt-prev', mask(f.match))
-    const actions = el('div', 'cx-tt-actions')
+    const head = el('div', 'cx-tip-label')
+    head.append(el('span', `cx-sev ${f.severity}`), el('span', '', `${f.label} · ${f.severity}`))
+    const act = el('div', 'cx-tip-act')
     const redact = el('button', 'cx-mini', 'Redact') as HTMLButtonElement
     redact.addEventListener('click', () => {
       this.handlers.onRedactOne(f)
-      this.hideTooltip()
+      this.hideTip()
     })
-    const allow = el('button', '', 'Allow') as HTMLButtonElement
-    allow.className = ''
-    allow.textContent = 'Allow once'
-    allow.style.cssText = 'background:#242424;color:#c9ccd3;border:1px solid #2a2a2a;border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer'
+    const allow = el('button', 'cx-ghost', 'Allow once') as HTMLButtonElement
     allow.addEventListener('click', () => {
       this.handlers.onAllowOnce(f)
-      this.hideTooltip()
+      this.hideTip()
     })
-    actions.append(redact, allow)
-    this.tooltip.append(head, prev, actions)
-    this.tooltip.hidden = false
-    // position above the span, clamped to viewport
-    const top = Math.max(8, rect.top - 86)
-    const left = Math.min(Math.max(8, rect.left), window.innerWidth - 290)
+    act.append(redact, allow)
+    this.tooltip.append(head, el('div', 'cx-tip-prev', mask(f.match)), act)
+
+    const top = Math.max(8, rect.top - 92)
+    const left = Math.min(Math.max(8, rect.left), window.innerWidth - 262)
     this.tooltip.style.top = `${top}px`
     this.tooltip.style.left = `${left}px`
+    this.tooltip.classList.add('cx-on')
   }
-
-  private scheduleTooltipHide(): void {
-    this.cancelTooltipHide()
-    this.hideTooltipTimer = setTimeout(() => this.hideTooltip(), 200)
+  private scheduleTipHide(): void {
+    this.cancelTip()
+    this.tipTimer = setTimeout(() => this.hideTip(), 220)
   }
-  private cancelTooltipHide(): void {
-    if (this.hideTooltipTimer) clearTimeout(this.hideTooltipTimer)
+  private cancelTip(): void {
+    if (this.tipTimer) clearTimeout(this.tipTimer)
   }
-  private hideTooltip(): void {
-    this.cancelTooltipHide()
-    this.tooltip.hidden = true
+  private hideTip(): void {
+    this.cancelTip()
+    this.tooltip.classList.remove('cx-on')
   }
 
   destroy(): void {
