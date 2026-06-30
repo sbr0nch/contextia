@@ -1,6 +1,7 @@
 import type { Finding } from '@contextia/engine'
 import type { Composer } from './composer.js'
 import type { Mode } from './storage.js'
+import { mask } from './mask.js'
 
 export interface UIHandlers {
   onRedactAll: () => void
@@ -283,12 +284,6 @@ function place(node: HTMLElement, left: number, top: number, width: number, heig
   node.style.top = `${top}px`
   node.style.width = `${width}px`
   node.style.height = `${height}px`
-}
-
-/** A safe preview of the matched value (never the whole secret in clear UI). */
-function mask(value: string): string {
-  if (value.length <= 10) return '•'.repeat(Math.max(4, value.length))
-  return `${value.slice(0, 4)}…${value.slice(-4)} · ${value.length} chars`
 }
 
 // Map [start,end) character offsets (into el.textContent) onto a DOM Range.

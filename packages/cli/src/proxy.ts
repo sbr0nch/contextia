@@ -111,6 +111,7 @@ export function resolveUpstream(url: string, configured?: string): string {
 }
 
 const SKIP_REQUEST_HEADERS = new Set(['host', 'connection', 'content-length', 'accept-encoding'])
+const MAX_SCAN_BODY = 5 * 1024 * 1024 // bodies larger than this are forwarded unscanned
 
 export function createProxyServer(opts: ProxyOptions): Server {
   const config = configFor(opts.all)
@@ -151,7 +152,9 @@ async function handle(
   let body = Buffer.concat(chunks)
   stats.requests++
 
-  if ((req.method === 'POST' || req.method === 'PUT') && body.length > 0) {
+  if (body.length > MAX_SCAN_BODY) {
+    process.stderr.write(`contextia: request body ${body.length} B exceeds scan cap — forwarded unscanned\n`)
+  } else if ((req.method === 'POST' || req.method === 'PUT') && body.length > 0) {
     try {
       const json: unknown = JSON.parse(body.toString('utf8'))
       const findings = processPayload(json, opts.mode, config, opts.custom)

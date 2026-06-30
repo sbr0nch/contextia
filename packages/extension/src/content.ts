@@ -2,6 +2,7 @@ import { detect, redact, type Config, type Finding } from '@contextia/engine'
 import { findComposer, type Composer } from './composer.js'
 import { Hud } from './ui.js'
 import { api } from './api.js'
+import { scoreSendButton, isSendTarget } from './send-button.js'
 import {
   getSettings,
   toEngineConfig,
@@ -139,22 +140,8 @@ function onSubmit(e: Event): void {
   blockSubmit(e)
 }
 
-// Resilient, selector-agnostic send-button detection: combine several weak
-// signals so a site redesign (renamed testid, moved button) doesn't break it.
-// Enter-key blocking works regardless of any of this.
-const SEND_HINT = /\b(send|submit)\b|invia|enviar|senden|envoyer|送信|发送|보내기/i
-
-function scoreSendButton(b: Element): number {
-  let s = 0
-  const testid = (b.getAttribute('data-testid') ?? '').toLowerCase()
-  const aria = `${b.getAttribute('aria-label') ?? ''} ${b.getAttribute('title') ?? ''}`.toLowerCase()
-  if (testid.includes('send')) s += 4
-  if (b instanceof HTMLButtonElement && b.type === 'submit') s += 3
-  if (SEND_HINT.test(aria)) s += 3
-  if (b.querySelector('svg') && !(b.textContent ?? '').trim()) s += 1
-  return s
-}
-
+// Send-button detection (resilient scoring) lives in ./send-button so it can be
+// unit-tested in isolation. Enter-key blocking works regardless of any of this.
 function findSendButton(): HTMLElement | null {
   const scope: ParentNode = composer?.el.closest('form') ?? document
   let best: HTMLElement | null = null
@@ -167,11 +154,6 @@ function findSendButton(): HTMLElement | null {
     }
   }
   return best
-}
-
-function isSendTarget(target: EventTarget | null): boolean {
-  const b = target instanceof Element ? target.closest('button, [role="button"]') : null
-  return !!b && scoreSendButton(b) >= 3
 }
 
 function blockSubmit(e: Event): void {

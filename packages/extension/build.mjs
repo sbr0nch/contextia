@@ -41,10 +41,13 @@ async function writeManifest() {
   n += 1
   await writeFile(counterFile, String(n))
 
+  const { version } = JSON.parse(await readFile('package.json', 'utf8'))
   const manifest = JSON.parse(await readFile('manifest.json', 'utf8'))
-  manifest.version = `0.0.${n}`
+  // Stable store version from package.json; the dev build number lives in
+  // version_name so a reload is still visibly different in chrome://extensions.
+  manifest.version = version
   const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19)
-  manifest.version_name = `0.0.${n} · built ${stamp} UTC`
+  manifest.version_name = `${version} · build ${n} · ${stamp} UTC`
   if (firefox) {
     // Firefox MV3 background is an event page (scripts), and it needs an add-on id.
     manifest.background = { scripts: ['background.js'] }
@@ -53,7 +56,7 @@ async function writeManifest() {
     }
   }
   await writeFile(`${outdir}/manifest.json`, JSON.stringify(manifest, null, 2))
-  console.log(`contextia: version 0.0.${n}${firefox ? ' (firefox)' : ''}`)
+  console.log(`contextia: version ${version} build ${n}${firefox ? ' (firefox)' : ''}`)
 }
 
 async function copyStatic() {
