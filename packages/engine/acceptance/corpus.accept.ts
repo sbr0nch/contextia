@@ -30,6 +30,12 @@ const REQUIRED_CRITICAL = [
   'twilio_key',
   'google_oauth_secret',
   'shopify_token',
+  'huggingface_token',
+  'digitalocean_token',
+  'postman_key',
+  'linear_key',
+  'square_token',
+  'stripe_webhook_secret',
 ]
 
 // Warning detectors: implemented but OFF by default (SPEC §9). JWT is a warning,

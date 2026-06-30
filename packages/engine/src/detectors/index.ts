@@ -22,6 +22,12 @@ import { sendgridKey } from './sendgrid-key.js'
 import { twilioKey } from './twilio-key.js'
 import { googleOauthSecret } from './google-oauth-secret.js'
 import { shopifyToken } from './shopify-token.js'
+import { huggingfaceToken } from './huggingface-token.js'
+import { digitaloceanToken } from './digitalocean-token.js'
+import { postmanKey } from './postman-key.js'
+import { linearKey } from './linear-key.js'
+import { squareToken } from './square-token.js'
+import { stripeWebhookSecret } from './stripe-webhook-secret.js'
 
 /** The active detector registry. Add new detectors here. */
 export const detectors: Detector[] = [
@@ -43,6 +49,12 @@ export const detectors: Detector[] = [
   twilioKey,
   googleOauthSecret,
   shopifyToken,
+  huggingfaceToken,
+  digitaloceanToken,
+  postmanKey,
+  linearKey,
+  squareToken,
+  stripeWebhookSecret,
   jwt,
   genericHighEntropy,
   internalHostname,
