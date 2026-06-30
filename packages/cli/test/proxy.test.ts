@@ -36,6 +36,16 @@ describe('textNodes / processPayload', () => {
     expect([...textNodes({ foo: 'bar' })]).toHaveLength(0)
     expect([...textNodes(null)]).toHaveLength(0)
   })
+
+  it('also redacts custom values and patterns', () => {
+    const body = { messages: [{ role: 'user', content: 'project Zephyr ticket 42-7 with AKIAIOSFODNN7EXAMPLE' }] }
+    const findings = processPayload(body, 'redact', configFor(), { values: ['Zephyr'], patterns: ['\\d+-\\d+'] })
+    expect(findings.some((f) => f.type === 'custom')).toBe(true)
+    expect(findings.some((f) => f.type === 'aws_access_key_id')).toBe(true)
+    const text = body.messages[0]!.content
+    expect(text).not.toMatch(/Zephyr|42-7|AKIAIOSFODNN7EXAMPLE/)
+    expect(text).toContain('⟨redacted:custom⟩')
+  })
 })
 
 describe('resolveUpstream', () => {

@@ -69,11 +69,26 @@ function cmdProxy(): void {
     process.stderr.write(`contextia: invalid --mode '${mode}' (use warn | redact | block)\n`)
     process.exit(2)
   }
+  let custom: { values: string[]; patterns: string[] } | undefined
+  const ruleFile = flagValue('--redact-file')
+  if (ruleFile) {
+    try {
+      const parsed = JSON.parse(readFileSync(ruleFile, 'utf8')) as { values?: unknown; patterns?: unknown }
+      custom = {
+        values: Array.isArray(parsed.values) ? (parsed.values as string[]) : [],
+        patterns: Array.isArray(parsed.patterns) ? (parsed.patterns as string[]) : [],
+      }
+    } catch {
+      process.stderr.write(`contextia: cannot read --redact-file ${ruleFile} (expected JSON { "values": [], "patterns": [] })\n`)
+      process.exit(2)
+    }
+  }
   startProxy({
     port,
     mode,
     upstream: flagValue('--upstream'),
     all: flags.has('--all'),
+    custom,
     onFinding: (f, info) => {
       const verb = mode === 'block' ? 'BLOCKED' : mode === 'redact' ? 'redacted' : 'flagged'
       const types = [...new Set(f.map((x) => x.type))].join(', ')
@@ -114,6 +129,8 @@ Options:
   --mode <m>           (proxy) warn | redact | block        (default: redact)
   --port <n>           (proxy) listen port                  (default: 8787)
   --upstream <url>     (proxy) force upstream API base URL  (default: auto)
+  --redact-file <p>    (proxy) JSON { "values": [], "patterns": [] } of your own
+                       data to always redact, on top of detected secrets
 
 Examples:
   contextia scan .env src/                       # check files for secrets

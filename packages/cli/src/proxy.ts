@@ -3,11 +3,17 @@ import { detect, redact, detectors, type Config, type Finding } from '@contextia
 
 export type ProxyMode = 'warn' | 'redact' | 'block'
 
+export interface CustomRules {
+  values: string[]
+  patterns: string[]
+}
+
 export interface ProxyOptions {
   port: number
   mode: ProxyMode
   upstream?: string | undefined
   all?: boolean | undefined
+  custom?: CustomRules | undefined
   onFinding?: ((findings: Finding[], info: { path: string }) => void) | undefined
 }
 
@@ -62,12 +68,34 @@ export function configFor(all?: boolean): Config {
   return all ? { enabledDetectors: detectors.map((d) => d.id) } : {}
 }
 
+// User-chosen values/patterns to always redact, on top of the detected secrets.
+function customFindings(text: string, custom: CustomRules): Finding[] {
+  const out: Finding[] = []
+  const add = (start: number, end: number, match: string): void => {
+    out.push({ id: `custom:${start}:${end}`, type: 'custom', label: 'Custom redaction', severity: 'critical', start, end, match })
+  }
+  for (const v of custom.values) {
+    if (!v) continue
+    for (let i = text.indexOf(v); i !== -1; i = text.indexOf(v, i + v.length)) add(i, i + v.length, v)
+  }
+  for (const p of custom.patterns) {
+    let re: RegExp
+    try {
+      re = new RegExp(p, 'g')
+    } catch {
+      continue // skip an invalid user pattern rather than crash
+    }
+    for (const m of text.matchAll(re)) if (m[0]) add(m.index, m.index + m[0].length, m[0])
+  }
+  return out
+}
+
 /** Scan (and, in redact mode, rewrite in place) the user text in a request body. */
-export function processPayload(body: unknown, mode: ProxyMode, config: Config): Finding[] {
+export function processPayload(body: unknown, mode: ProxyMode, config: Config, custom?: CustomRules): Finding[] {
   const findings: Finding[] = []
   for (const node of textNodes(body)) {
     const text = node.get()
-    const found = detect(text, config)
+    const found = [...detect(text, config), ...(custom ? customFindings(text, custom) : [])]
     if (found.length) {
       findings.push(...found)
       if (mode === 'redact') node.set(redact(text, found))
@@ -126,7 +154,7 @@ async function handle(
   if ((req.method === 'POST' || req.method === 'PUT') && body.length > 0) {
     try {
       const json: unknown = JSON.parse(body.toString('utf8'))
-      const findings = processPayload(json, opts.mode, config)
+      const findings = processPayload(json, opts.mode, config, opts.custom)
       if (findings.length > 0) {
         stats.withFindings++
         for (const f of findings) stats.byType[f.type] = (stats.byType[f.type] ?? 0) + 1
