@@ -8,7 +8,7 @@
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
     "typecheck": "tsc -p tsconfig.json",
-    "package": "node build.mjs && cd dist && zip -rq ../contextia.zip . && echo 'packaged: packages/extension/contextia.zip'",
+    "package": "node build.mjs && node pack.mjs",
     "test": "vitest run"
   },
   "devDependencies": {
