@@ -52,7 +52,13 @@ async function writeManifest() {
     // Firefox MV3 background is an event page (scripts), and it needs an add-on id.
     manifest.background = { scripts: ['background.js'] }
     manifest.browser_specific_settings = {
-      gecko: { id: 'contextia@contextia.dev', strict_min_version: '121.0' },
+      gecko: {
+        id: 'contextia@contextia.dev',
+        strict_min_version: '121.0',
+        // AMO requires an explicit data-collection declaration; Contextia
+        // collects and transmits nothing.
+        data_collection_permissions: { required: ['none'] },
+      },
     }
   }
   await writeFile(`${outdir}/manifest.json`, JSON.stringify(manifest, null, 2))

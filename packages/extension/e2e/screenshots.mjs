@@ -18,7 +18,7 @@ const SECRET_LINE = 'Deploy creds: AKIAIOSFODNN7EXAMPLE plus token ghp_' + 'a'.r
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
 })
-const context = await browser.newContext({ viewport: { width: 900, height: 600 } })
+const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 })
 
 // Zero-network guard: record any non-local request the code attempts.
 const external = []
@@ -67,10 +67,13 @@ console.log('composer after redact:', composerText)
 
 // --- Popup (seeded) ---
 const seed = `globalThis.__cxStore = ${JSON.stringify({
-  stats: { caught: 7, redacted: 5, leaked: 0 },
+  stats: { caught: 23, redacted: 18, leaked: 0, allowed: 4 },
   log: [
     { ts: Date.now() - 60000, site: 'chatgpt.com', type: 'aws_access_key_id', severity: 'critical', action: 'redacted' },
     { ts: Date.now() - 200000, site: 'claude.ai', type: 'github_token', severity: 'critical', action: 'flagged' },
+    { ts: Date.now() - 480000, site: 'chatgpt.com', type: 'anthropic_key', severity: 'critical', action: 'blocked' },
+    { ts: Date.now() - 900000, site: 'claude.ai', type: 'email', severity: 'warning', action: 'allowed' },
+    { ts: Date.now() - 1500000, site: 'chatgpt.com', type: 'credit_card', severity: 'warning', action: 'redacted' },
   ],
 })}`
 
