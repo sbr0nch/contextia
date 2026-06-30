@@ -10,7 +10,7 @@
     "packages/extension"
   ],
   "scripts": {
-    "test": "npm run test --workspace @contextia/engine",
+    "test": "npm run test --workspaces --if-present",
     "acceptance": "npm run acceptance --workspace @contextia/engine",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"

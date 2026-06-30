@@ -8,12 +8,14 @@
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
     "typecheck": "tsc -p tsconfig.json",
-    "package": "node build.mjs && cd dist && zip -rq ../contextia.zip . && echo 'packaged: packages/extension/contextia.zip'"
+    "package": "node build.mjs && cd dist && zip -rq ../contextia.zip . && echo 'packaged: packages/extension/contextia.zip'",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
     "esbuild": "^0.24.2",
-    "playwright": "^1.61.1"
+    "playwright": "^1.61.1",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "@contextia/engine": "*"
