@@ -8,7 +8,12 @@ sources (e.g. MIT, Apache-2.0); the license of each source is verified before us
 
 Third-party pattern sources
 ----------------------------
-(none yet — entries are added as patterns are adapted, one per source)
+The v1 detector patterns are clean-room re-derivations from publicly documented
+credential formats (vendor prefixes such as AKIA, ghp_, sk-ant-, AIza; PEM armor;
+RFC1918 ranges; RFC-style email/URI shapes). No detector regex was copied from a
+third-party project, so no third-party license attribution is required for v1.
+Should a pattern later be adapted from a permissively-licensed project, add an
+entry here:
 
 Format for each entry:
   - Detector:   <detector id>

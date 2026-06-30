@@ -24,14 +24,19 @@ export function sortFindings(findings: Finding[]): Finding[] {
   )
 }
 
+// Bound the work per call; pasted text beyond this is not scanned. Keeps regex
+// cost predictable and is the ReDoS backstop together with linear-time patterns.
+const MAX_INPUT = 1_000_000
+
 export function detect(text: string, config: Config = {}): Finding[] {
+  const scanned = text.length > MAX_INPUT ? text.slice(0, MAX_INPUT) : text
   const enabled = resolveEnabled(config)
   const isAllowed = compileAllowlist(config)
   const out: Finding[] = []
   for (const d of detectors) {
     if (!enabled.has(d.id)) continue
     const severity = config.severityOverrides?.[d.id] ?? d.severity
-    for (const m of d.scan(text)) {
+    for (const m of d.scan(scanned)) {
       if (isAllowed(m.match)) continue
       out.push({
         id: `${d.id}:${m.start}:${m.end}`,
