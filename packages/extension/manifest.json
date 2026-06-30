@@ -5,18 +5,19 @@
   "description": "Catch secrets before they reach an AI chat. Local, on-device, no network.",
   "permissions": ["storage"],
   "host_permissions": ["https://chatgpt.com/*", "https://claude.ai/*"],
-  "background": {
-    "service_worker": "src/background.js",
-    "type": "module"
-  },
+  "icons": { "16": "icons/icon-16.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" },
+  "background": { "service_worker": "background.js" },
   "content_scripts": [
     {
       "matches": ["https://chatgpt.com/*", "https://claude.ai/*"],
-      "js": ["src/content.js"],
+      "js": ["content.js"],
       "run_at": "document_idle"
     }
   ],
   "action": {
-    "default_title": "Contextia"
-  }
+    "default_title": "Contextia",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "icons/icon-16.png", "48": "icons/icon-48.png", "128": "icons/icon-128.png" }
+  },
+  "options_page": "options.html"
 }

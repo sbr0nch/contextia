@@ -25,6 +25,9 @@ coverage/
 *.crx
 *.pem
 
+# e2e screenshot output
+shots/
+
 # Env / secrets
 .env
 .env.*

@@ -3,5 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "description": "Contextia MV3 browser extension. Consumes @contextia/engine.",
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json",
+    "package": "node build.mjs && cd dist && zip -rq ../contextia.zip . && echo 'packaged: packages/extension/contextia.zip'"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "esbuild": "^0.24.2",
+    "playwright": "^1.61.1"
+  },
+  "dependencies": {
+    "@contextia/engine": "*"
+  }
 }

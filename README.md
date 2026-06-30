@@ -35,11 +35,22 @@ This is an npm workspace with two packages:
 The engine is deliberately environment-agnostic so other surfaces can reuse it
 without a rewrite.
 
+## Install (unpacked)
+
+```bash
+npm install
+npm run build --workspace @contextia/extension   # outputs packages/extension/dist
+```
+
+Then in Chrome: open `chrome://extensions`, enable **Developer mode**, click
+**Load unpacked**, and select `packages/extension/dist`.
+
 ## Development
 
 ```bash
 npm install
-npm test          # run the engine test suite with coverage
+npm test          # engine test suite with coverage
+npm run build     # build all packages
 ```
 
 ## License
