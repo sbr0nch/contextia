@@ -1,5 +1,5 @@
 import * as esbuild from 'esbuild'
-import { cp, mkdir, rm } from 'node:fs/promises'
+import { cp, mkdir, rm, readFile, writeFile } from 'node:fs/promises'
 
 const watch = process.argv.includes('--watch')
 const outdir = 'dist'
@@ -27,8 +27,29 @@ const ctx = await esbuild.context({
   outdir,
 })
 
+// Bump a monotonic build number on every build so the version visibly changes
+// in chrome://extensions — an easy way to confirm a reload picked up new code.
+async function writeManifest() {
+  const counterFile = '.build-number'
+  let n = 0
+  try {
+    n = parseInt(await readFile(counterFile, 'utf8'), 10) || 0
+  } catch {
+    n = 0
+  }
+  n += 1
+  await writeFile(counterFile, String(n))
+
+  const manifest = JSON.parse(await readFile('manifest.json', 'utf8'))
+  manifest.version = `0.0.${n}`
+  const stamp = new Date().toISOString().replace('T', ' ').slice(0, 19)
+  manifest.version_name = `0.0.${n} · built ${stamp} UTC`
+  await writeFile(`${outdir}/manifest.json`, JSON.stringify(manifest, null, 2))
+  console.log(`contextia: version 0.0.${n}`)
+}
+
 async function copyStatic() {
-  await cp('manifest.json', `${outdir}/manifest.json`)
+  await writeManifest()
   await cp('public', outdir, { recursive: true })
 }
 
