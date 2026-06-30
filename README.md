@@ -39,7 +39,7 @@ without a rewrite.
 
 ```bash
 npm install
-npm run build --workspace @contextia/extension   # outputs packages/extension/dist
+npm run build --workspace @sbr0nch/contextia-extension   # outputs packages/extension/dist
 ```
 
 Then in Chrome: open `chrome://extensions`, enable **Developer mode**, click

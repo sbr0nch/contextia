@@ -1,10 +1,10 @@
-# @contextia/cli
+# @sbr0nch/contextia
 
 Keep secrets out of AI, from the terminal. Built on
-[`@contextia/engine`](https://github.com/sbr0nch/contextia/tree/main/packages/engine).
+[`@sbr0nch/contextia-engine`](https://github.com/sbr0nch/contextia/tree/main/packages/engine).
 
 ```bash
-npm install -g @contextia/cli
+npm install -g @sbr0nch/contextia
 ```
 
 ## Commands

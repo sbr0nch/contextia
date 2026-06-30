@@ -10,8 +10,8 @@ all targets.
 Use the default build — these are all Chromium and load the same output.
 
 ```bash
-npm run build --workspace @contextia/extension     # -> dist/
-npm run package --workspace @contextia/extension   # -> contextia.zip
+npm run build --workspace @sbr0nch/contextia-extension     # -> dist/
+npm run package --workspace @sbr0nch/contextia-extension   # -> contextia.zip
 ```
 
 Load unpacked: `chrome://extensions` (or `edge://extensions`) → Developer mode →
@@ -23,8 +23,8 @@ Firefox needs an event-page background and an add-on id, so it gets its own
 manifest via a build flag (the JavaScript is identical).
 
 ```bash
-npm run build:firefox --workspace @contextia/extension     # -> dist-firefox/
-npm run package:firefox --workspace @contextia/extension   # -> contextia-firefox.zip
+npm run build:firefox --workspace @sbr0nch/contextia-extension     # -> dist-firefox/
+npm run package:firefox --workspace @sbr0nch/contextia-extension   # -> contextia-firefox.zip
 ```
 
 Load temporarily: `about:debugging#/runtime/this-firefox` → Load Temporary

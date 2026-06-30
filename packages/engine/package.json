@@ -1,6 +1,6 @@
 {
   "name": "@sbr0nch/contextia-engine",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Environment-agnostic secret detection engine. No DOM, no network, dependency-light.",
   "keywords": [
     "secrets",

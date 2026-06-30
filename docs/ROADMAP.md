@@ -22,7 +22,7 @@ Tracked next steps for Contextia. Not commitments — a working list.
 ## More surfaces (same environment-agnostic engine, no rewrite)
 - [ ] **CLI** (`packages/cli`): scan stdin/files, print or redact findings — for
       pre-commit hooks, CI, and manual use. Low effort; engine is ready.
-- [ ] **SDK**: publish `@contextia/engine` to npm for third parties to embed.
+- [ ] **SDK**: publish `@sbr0nch/contextia-engine` to npm for third parties to embed.
 - [ ] **Local proxy** for terminal AI agents: a local server the tool points its
       `ANTHROPIC_BASE_URL`/`OPENAI_BASE_URL` at; scans/redacts/blocks the request
       body before it leaves. One component covers any terminal/agent. Medium effort.

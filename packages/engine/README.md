@@ -1,17 +1,17 @@
-# @contextia/engine
+# @sbr0nch/contextia-engine
 
 The detection core behind [Contextia](https://github.com/sbr0nch/contextia):
 environment-agnostic secret detection. No DOM, no network, dependency-light — the
 same engine powers the browser extension, the CLI, and the local proxy.
 
 ```bash
-npm install @contextia/engine
+npm install @sbr0nch/contextia-engine
 ```
 
 ## Usage
 
 ```ts
-import { detect, redact } from '@contextia/engine'
+import { detect, redact } from '@sbr0nch/contextia-engine'
 
 const text = 'deploy with AKIAIOSFODNN7EXAMPLE'
 
@@ -26,7 +26,7 @@ By default only the `critical` detectors run. Opt into the `warning` detectors,
 override severities, or allowlist values/patterns via the config:
 
 ```ts
-import { detect, detectors } from '@contextia/engine'
+import { detect, detectors } from '@sbr0nch/contextia-engine'
 
 detect(text, {
   enabledDetectors: detectors.map((d) => d.id), // everything, incl. warnings

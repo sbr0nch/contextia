@@ -57,5 +57,5 @@ https://contextia.dev/privacy  (or the repo's PRIVACY.md)
 - Small promo tile 440×280 and marquee 1400×560 (optional, from the brand kit)
 
 ## Build to upload
-Run `npm run package --workspace @contextia/extension` → produces
+Run `npm run package --workspace @sbr0nch/contextia-extension` → produces
 `packages/extension/contextia.zip`. Upload that zip.
