@@ -39,7 +39,7 @@ async function render(): Promise<void> {
   const headline = el('div', 'cx-headline')
   const num = document.createElement('b')
   num.textContent = String(stats.caught)
-  headline.append(num, document.createTextNode(` secrets caught · ${stats.leaked} leaked`))
+  headline.append(num, document.createTextNode(` secrets caught · ${stats.allowed} allowed · ${stats.leaked} leaked`))
 
   const field = el('div', 'cx-field')
   field.append(el('label', '', 'Mode'))

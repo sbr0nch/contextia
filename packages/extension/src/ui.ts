@@ -7,6 +7,7 @@ export interface UIHandlers {
   onRedactAll: () => void
   onRedactOne: (finding: Finding) => void
   onAllowOnce: (finding: Finding) => void
+  onAllowAll: (findings: Finding[]) => void
   onAllowPattern: (finding: Finding) => void
 }
 
@@ -187,9 +188,11 @@ export class Hud {
     if (findings.length === 0) return
     const head = el('div', 'cx-head')
     head.append(el('span', 'cx-title', `${findings.length} secret${findings.length > 1 ? 's' : ''} detected`))
+    const allowAll = el('button', 'cx-ghost', 'Allow all') as HTMLButtonElement
+    allowAll.addEventListener('click', () => this.handlers.onAllowAll(findings))
     const go = el('button', 'cx-go', 'Redact all') as HTMLButtonElement
     go.addEventListener('click', () => this.handlers.onRedactAll())
-    head.append(go)
+    head.append(allowAll, go)
     this.popover.append(head)
 
     for (const f of findings) {

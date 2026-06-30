@@ -31,6 +31,14 @@ async function init(): Promise<void> {
     onRedactOne: (f) => doRedactOne(f),
     onAllowOnce: (f) => {
       sessionAllow.add(f.match)
+      recordAllow(f)
+      scan()
+    },
+    onAllowAll: (fs) => {
+      for (const f of fs) {
+        sessionAllow.add(f.match)
+        recordAllow(f)
+      }
       scan()
     },
     onAllowPattern: (f) => void allowPattern(f),
@@ -170,7 +178,15 @@ async function allowPattern(f: Finding): Promise<void> {
     settings = { ...settings, allowlist: { ...settings.allowlist, patterns: [...settings.allowlist.patterns, escaped] } }
     await setSettings(settings)
   }
+  recordAllow(f)
   scan()
+}
+
+// An allow is a user decision, not a catch — track it separately so the stats
+// reflect "you chose to let this through" without inflating the caught count.
+function recordAllow(f: Finding): void {
+  void bumpStats({ allowed: 1 })
+  void appendLog([entry(f, 'allowed')])
 }
 
 function logNew(fs: Finding[]): void {

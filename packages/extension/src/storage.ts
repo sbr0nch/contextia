@@ -31,6 +31,7 @@ export interface Stats {
   caught: number
   redacted: number
   leaked: number
+  allowed: number
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -77,7 +78,7 @@ export async function appendLog(entries: LogEntry[]): Promise<void> {
 
 export async function getStats(): Promise<Stats> {
   const r = await api.storage.local.get(STATS_KEY)
-  return (r[STATS_KEY] as Stats) ?? { caught: 0, redacted: 0, leaked: 0 }
+  return { caught: 0, redacted: 0, leaked: 0, allowed: 0, ...(r[STATS_KEY] as Partial<Stats> | undefined) }
 }
 
 export async function bumpStats(patch: Partial<Stats>): Promise<void> {
@@ -87,6 +88,7 @@ export async function bumpStats(patch: Partial<Stats>): Promise<void> {
       caught: s.caught + (patch.caught ?? 0),
       redacted: s.redacted + (patch.redacted ?? 0),
       leaked: s.leaked + (patch.leaked ?? 0),
+      allowed: s.allowed + (patch.allowed ?? 0),
     },
   })
 }

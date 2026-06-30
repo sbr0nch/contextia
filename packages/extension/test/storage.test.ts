@@ -66,7 +66,8 @@ describe('stats', () => {
   it('accumulates counters', async () => {
     await bumpStats({ caught: 2 })
     await bumpStats({ caught: 3, redacted: 1 })
-    expect(await getStats()).toEqual({ caught: 5, redacted: 1, leaked: 0 })
+    await bumpStats({ allowed: 2 })
+    expect(await getStats()).toEqual({ caught: 5, redacted: 1, leaked: 0, allowed: 2 })
   })
 })
 
@@ -76,7 +77,7 @@ describe('clearAll', () => {
     await bumpStats({ caught: 4 })
     await appendLog([logEntry()])
     await clearAll()
-    expect(await getStats()).toEqual({ caught: 0, redacted: 0, leaked: 0 })
+    expect(await getStats()).toEqual({ caught: 0, redacted: 0, leaked: 0, allowed: 0 })
     expect(await getLog()).toEqual([])
     expect((await getSettings()).mode).toBe('off')
   })
