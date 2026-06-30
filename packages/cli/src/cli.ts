@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
-import { detect, redact, detectors } from '@sbr0nch/contextia-engine'
+import { spawn } from 'node:child_process'
+import type { AddressInfo } from 'node:net'
+import { detect, redact, detectors, type Finding } from '@sbr0nch/contextia-engine'
 import { configFor, locate, maskValue, type ScanOptions } from './core.js'
-import { startProxy, type ProxyMode } from './proxy.js'
+import { startProxy, createProxyServer, type ProxyMode, type CustomRules } from './proxy.js'
 
 declare const __CONTEXTIA_VERSION__: string
 
@@ -63,39 +65,98 @@ function cmdRedact(): void {
   for (const { text } of inputs()) process.stdout.write(redact(text, detect(text, config)))
 }
 
-function cmdProxy(): void {
-  const port = Number(flagValue('--port') ?? '8787')
-  const mode = (flagValue('--mode') ?? 'redact') as ProxyMode
-  if (!['warn', 'redact', 'block'].includes(mode)) {
-    process.stderr.write(`contextia: invalid --mode '${mode}' (use warn | redact | block)\n`)
+function validMode(mode: string): mode is ProxyMode {
+  if (['warn', 'redact', 'block'].includes(mode)) return true
+  process.stderr.write(`contextia: invalid --mode '${mode}' (use warn | redact | block)\n`)
+  process.exit(2)
+}
+
+function parseCustom(ruleFile: string | undefined): CustomRules | undefined {
+  if (!ruleFile) return undefined
+  try {
+    const parsed = JSON.parse(readFileSync(ruleFile, 'utf8')) as { values?: unknown; patterns?: unknown }
+    return {
+      values: Array.isArray(parsed.values) ? (parsed.values as string[]) : [],
+      patterns: Array.isArray(parsed.patterns) ? (parsed.patterns as string[]) : [],
+    }
+  } catch {
+    process.stderr.write(`contextia: cannot read --redact-file ${ruleFile} (expected JSON { "values": [], "patterns": [] })\n`)
     process.exit(2)
   }
-  let custom: { values: string[]; patterns: string[] } | undefined
-  const ruleFile = flagValue('--redact-file')
-  if (ruleFile) {
-    try {
-      const parsed = JSON.parse(readFileSync(ruleFile, 'utf8')) as { values?: unknown; patterns?: unknown }
-      custom = {
-        values: Array.isArray(parsed.values) ? (parsed.values as string[]) : [],
-        patterns: Array.isArray(parsed.patterns) ? (parsed.patterns as string[]) : [],
-      }
-    } catch {
-      process.stderr.write(`contextia: cannot read --redact-file ${ruleFile} (expected JSON { "values": [], "patterns": [] })\n`)
-      process.exit(2)
-    }
+}
+
+function findingLogger(mode: ProxyMode): (f: Finding[], info: { path: string }) => void {
+  return (f, info) => {
+    const verb = mode === 'block' ? 'BLOCKED' : mode === 'redact' ? 'redacted' : 'flagged'
+    const types = [...new Set(f.map((x) => x.type))].join(', ')
+    process.stderr.write(`contextia: ${verb} ${f.length} secret(s) on ${info.path} — ${types}\n`)
   }
+}
+
+function cmdProxy(): void {
+  const mode = flagValue('--mode') ?? 'redact'
+  if (!validMode(mode)) return
   startProxy({
-    port,
+    port: Number(flagValue('--port') ?? '8787'),
     mode,
     upstream: flagValue('--upstream'),
     all: flags.has('--all'),
-    custom,
+    custom: parseCustom(flagValue('--redact-file')),
     reversible: flags.has('--reversible'),
-    onFinding: (f, info) => {
-      const verb = mode === 'block' ? 'BLOCKED' : mode === 'redact' ? 'redacted' : 'flagged'
-      const types = [...new Set(f.map((x) => x.type))].join(', ')
-      process.stderr.write(`contextia: ${verb} ${f.length} secret(s) on ${info.path} — ${types}\n`)
-    },
+    onFinding: findingLogger(mode),
+  })
+}
+
+// `contextia run [opts] -- <cmd>`: start the proxy on an ephemeral port, point the
+// child's ANTHROPIC/OPENAI base URL at it, and run the agent — no manual setup.
+function cmdRun(): void {
+  const sep = argv.indexOf('--')
+  if (sep === -1 || sep === argv.length - 1) {
+    process.stderr.write('contextia: usage: contextia run [--mode m] [--all] [--reversible] [--redact-file p] -- <command> [args...]\n')
+    process.exit(2)
+  }
+  const left = argv.slice(1, sep)
+  const cmd = argv[sep + 1] as string
+  const cmdArgs = argv.slice(sep + 2)
+  const lflag = (n: string): boolean => left.includes(n)
+  const lval = (n: string): string | undefined => {
+    const eq = left.find((a) => a.startsWith(n + '='))
+    if (eq) return eq.slice(n.length + 1)
+    const i = left.indexOf(n)
+    const next = left[i + 1]
+    return i >= 0 && next !== undefined && !next.startsWith('--') ? next : undefined
+  }
+  const mode = lval('--mode') ?? 'redact'
+  if (!validMode(mode)) return
+
+  const server = createProxyServer({
+    port: 0,
+    mode,
+    upstream: lval('--upstream'),
+    all: lflag('--all'),
+    custom: parseCustom(lval('--redact-file')),
+    reversible: lflag('--reversible'),
+    onFinding: findingLogger(mode),
+  })
+  server.listen(0, '127.0.0.1', () => {
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    process.stderr.write(`contextia: guarding (mode=${mode}) → ${cmd} ${cmdArgs.join(' ')}\n`)
+    const child = spawn(cmd, cmdArgs, {
+      stdio: 'inherit',
+      env: { ...process.env, ANTHROPIC_BASE_URL: url, OPENAI_BASE_URL: url, OPENAI_API_BASE: url },
+    })
+    const stop = (): void => { child.kill('SIGTERM') }
+    process.on('SIGINT', stop)
+    process.on('SIGTERM', stop)
+    child.on('error', (e) => {
+      server.close()
+      process.stderr.write(`contextia: cannot launch '${cmd}': ${e.message}\n`)
+      process.exit(127)
+    })
+    child.on('exit', (code, signal) => {
+      server.close()
+      process.exit(signal ? 1 : code ?? 0)
+    })
   })
 }
 
@@ -121,6 +182,8 @@ Commands:
   redact [files...]    Print the input with secrets replaced by placeholder tokens
   proxy                Run a local proxy that scans/redacts/blocks what your AI
                        agent sends to the LLM (the AI-DLP surface for the terminal)
+  run -- <cmd>         Launch a command (an AI agent) with the proxy already wired
+                       in — no manual base-URL setup. e.g. contextia run -- claude
   list                 List the available detectors
   version              Print the version
   help                 Show this help
@@ -142,9 +205,13 @@ Examples:
   git diff | contextia scan                      # check a diff in a pre-commit hook
   contextia redact server.log > clean.log        # share a log without credentials
 
-  # AI-DLP: redact secrets before your agent's requests leave the machine
+  # AI-DLP: wrap your agent so secrets are redacted before requests leave (one step)
+  contextia run -- claude
+  contextia run --mode block -- cursor              # or hard-block on a secret
+
+  # …or run the proxy yourself and point an agent at it manually
   contextia proxy --mode redact
-  ANTHROPIC_BASE_URL=http://localhost:8787 claude   # point the agent at the proxy
+  ANTHROPIC_BASE_URL=http://localhost:8787 claude
   #   live stats at http://localhost:8787/__contextia
 
 Everything runs locally. No network requests beyond forwarding the agent's own
@@ -164,6 +231,9 @@ if (command === 'version' || flags.has('--version') || argv.includes('-v')) {
       break
     case 'proxy':
       cmdProxy()
+      break
+    case 'run':
+      cmdRun()
       break
     case 'list':
       cmdList()
