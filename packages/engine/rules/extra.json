@@ -1,0 +1,82 @@
+[
+  {
+    "id": "mailchimp_key",
+    "label": "Mailchimp API key",
+    "severity": "critical",
+    "pattern": "\\b[0-9a-f]{32}-us\\d{1,2}\\b",
+    "positives": ["{a:32}-us1", "{f:32}-us20"],
+    "negatives": ["abcd-us1", "{a:32}-usX", "not a mailchimp key"]
+  },
+  {
+    "id": "mailgun_key",
+    "label": "Mailgun API key",
+    "severity": "critical",
+    "pattern": "\\bkey-[0-9a-zA-Z]{32}\\b",
+    "positives": ["key-{a:32}", "key-{A:32}"],
+    "negatives": ["key-tooshort", "a keyword here", "key-{a:31}"]
+  },
+  {
+    "id": "newrelic_key",
+    "label": "New Relic user key",
+    "severity": "critical",
+    "pattern": "\\bNRAK-[A-Z0-9]{27}\\b",
+    "positives": ["NRAK-{A:27}", "NRAK-{0:27}"],
+    "negatives": ["NRAK-short", "nrak-{A:27}", "just some text"]
+  },
+  {
+    "id": "pypi_token",
+    "label": "PyPI upload token",
+    "severity": "critical",
+    "pattern": "\\bpypi-AgEI[A-Za-z0-9_-]{50,}\\b",
+    "positives": ["pypi-AgEI{a:50}", "pypi-AgEI{A:60}"],
+    "negatives": ["pypi-short", "pypi-XXXX{a:50}", "a pypi package"]
+  },
+  {
+    "id": "doppler_token",
+    "label": "Doppler personal token",
+    "severity": "critical",
+    "pattern": "\\bdp\\.pt\\.[A-Za-z0-9]{43}\\b",
+    "positives": ["dp.pt.{a:43}", "dp.pt.{A:43}"],
+    "negatives": ["dp.pt.short", "dp.sa.{a:43}", "doppler config"]
+  },
+  {
+    "id": "grafana_token",
+    "label": "Grafana service account token",
+    "severity": "critical",
+    "pattern": "\\bglsa_[A-Za-z0-9]{32}_[a-f0-9]{8}\\b",
+    "positives": ["glsa_{a:32}_{0:8}", "glsa_{A:32}_{f:8}"],
+    "negatives": ["glsa_short", "glsa_{a:32}_xyz", "grafana dashboard"]
+  },
+  {
+    "id": "databricks_token",
+    "label": "Databricks token",
+    "severity": "critical",
+    "pattern": "\\bdapi[0-9a-f]{32}\\b",
+    "positives": ["dapi{a:32}", "dapi{0:32}"],
+    "negatives": ["dapishort", "dapi{g:32}", "a databricks notebook"]
+  },
+  {
+    "id": "telegram_bot_token",
+    "label": "Telegram bot token",
+    "severity": "critical",
+    "pattern": "\\b\\d{8,10}:[A-Za-z0-9_-]{35}\\b",
+    "positives": ["{1:9}:{a:35}", "{0:10}:{A:35}"],
+    "negatives": ["123:abc", "{1:9}:{a:34}", "a telegram message"]
+  },
+  {
+    "id": "brevo_key",
+    "label": "Brevo (Sendinblue) API key",
+    "severity": "critical",
+    "pattern": "\\bxkeysib-[a-f0-9]{64}-[A-Za-z0-9]{16}\\b",
+    "positives": ["xkeysib-{a:64}-{A:16}", "xkeysib-{0:64}-{b:16}"],
+    "negatives": ["xkeysib-short", "xkeysib-{a:64}-short", "a brevo email"]
+  },
+  {
+    "id": "planetscale_token",
+    "label": "PlanetScale password token",
+    "severity": "critical",
+    "pattern": "\\bpscale_tkn_[A-Za-z0-9_-]{32,}\\b",
+    "positives": ["pscale_tkn_{a:32}", "pscale_tkn_{A:40}"],
+    "negatives": ["pscale_tkn_short", "pscale_pw_{a:32}", "a planetscale db"]
+  }
+]

@@ -2,7 +2,15 @@
   "name": "@contextia/engine",
   "version": "0.1.0",
   "description": "Environment-agnostic secret detection engine. No DOM, no network, dependency-light.",
-  "keywords": ["secrets", "secret-detection", "dlp", "security", "api-keys", "redaction", "credentials"],
+  "keywords": [
+    "secrets",
+    "secret-detection",
+    "dlp",
+    "security",
+    "api-keys",
+    "redaction",
+    "credentials"
+  ],
   "homepage": "https://github.com/sbr0nch/contextia/tree/main/packages/engine#readme",
   "bugs": "https://github.com/sbr0nch/contextia/issues",
   "repository": {
@@ -21,14 +29,17 @@
       "import": "./src/index.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "acceptance": "vitest run --config vitest.acceptance.config.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "gen": "node scripts/generate-detectors.mjs"
   },
   "publishConfig": {
     "access": "public",
