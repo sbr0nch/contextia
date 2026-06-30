@@ -22,24 +22,24 @@ const find = (loc, sev, type, prev, why) =>
 const scenes = {
   scan: {
     title: 'contextia — scan',
-    cmd: 'contextia scan --explain .env',
+    cmd: 'git diff | contextia scan --explain',
     lines: [
-      find('.env:1:8', 'critical', 'db_connection_string', 'post…5432', 'Connection string with credentials — sharing it with an AI assistant could leak access.'),
-      find('.env:2:19', 'critical', 'aws_access_key_id', 'AKIA…MPLE', 'AWS access key ID looks like a live credential.'),
-      find('.env:3:14', 'critical', 'github_token', 'ghp_…aaaa', 'A GitHub token can read or push to your repositories — revoke it if it leaks.'),
-      find('.env:4:8', 'critical', 'stripe_live_key', 'sk_l…aaaa', 'Stripe live key looks like a live credential.'),
+      find('src/payments.ts:42', 'critical', 'stripe_live_key', 'sk_l…aaaa', 'Stripe live key looks like a live credential — sharing it with an AI assistant could leak access.'),
+      find('src/lib/anthropic.ts:7', 'critical', 'anthropic_key', 'sk-a…aaaa', 'An Anthropic API key grants billable access to your account — never paste it into a prompt.'),
+      find('config/db.ts:12', 'critical', 'db_connection_string', 'post…5432', 'Connection string with credentials looks like a live credential.'),
       '',
-      c('warn', '6 secrets found'),
+      c('warn', '3 secrets found'),
     ],
   },
   redact: {
     title: 'contextia — redact',
-    cmd: 'contextia redact .env',
+    cmd: 'contextia redact deploy.log > clean.log',
     lines: [
-      `DB_URL=${c('tok', '⟨redacted:db_connection_string⟩')}/prod`,
-      `AWS_ACCESS_KEY_ID=${c('tok', '⟨redacted:aws_access_key_id⟩')}`,
-      `GITHUB_TOKEN=${c('tok', '⟨redacted:github_token⟩')}`,
-      `STRIPE=${c('tok', '⟨redacted:stripe_live_key⟩')}`,
+      c('dim', '# deploy.log, ready to paste into an AI assistant:'),
+      `[deploy] db ${c('tok', '⟨redacted:db_connection_string⟩')}/app connected`,
+      `[deploy] aws key ${c('tok', '⟨redacted:aws_access_key_id⟩')} loaded`,
+      `[deploy] stripe webhook ${c('tok', '⟨redacted:stripe_webhook_secret⟩')} verified`,
+      `[deploy] done in 4.2s`,
     ],
   },
   proxy: {
