@@ -21,10 +21,10 @@ contain live API keys, tokens, private keys and connection strings. Contextia
 catches them at the moment of typing or pasting, entirely on your device.
 
 What it does:
-• Detects 40+ credential types — AWS, GitHub, GitLab, Stripe, Slack, OpenAI,
-  Anthropic, Google, Azure, Twilio, SendGrid and more — plus PEM private keys,
-  .env secrets, database connection strings, JWTs, and personal data like
-  Luhn-valid credit-card numbers and IBANs.
+• Detects 50+ credential types — AWS, GitHub, GitLab, Stripe, Slack, OpenAI,
+  Anthropic, Google, Azure, Twilio, SendGrid, Figma, Atlassian and more — plus
+  PEM private keys, .env secrets, database connection strings, JWTs, and personal
+  data like Luhn-valid credit-card numbers and IBANs.
 • Explains why each match was flagged, so it's never a mystery.
 • Underlines the offending text and shows a popover: Redact, Allow once, Allow
   all, or Allow this pattern always.

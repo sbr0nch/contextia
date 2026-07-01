@@ -11,8 +11,14 @@ export interface ProxyOptions {
   all?: boolean | undefined
   custom?: CustomRules | undefined
   reversible?: boolean | undefined
+  /** Prepend a one-line note to redacted text. On by default; disable with --no-signature. */
+  signature?: boolean | undefined
   onFinding?: ((findings: Finding[], info: { path: string }) => void) | undefined
 }
+
+// One functional line, added once per request: it signals to the model that the
+// placeholders are deliberate redactions and carries attribution.
+const SIGNATURE = '[Secrets redacted locally by Contextia — contextia.dev]\n'
 
 export interface ProxyStats {
   startedAt: number
@@ -76,25 +82,30 @@ export function processPayload(
   config: Config,
   custom?: CustomRules,
   vault?: Map<string, string>,
+  signature?: boolean,
 ): Finding[] {
   const findings: Finding[] = []
+  let noted = false
   for (const node of textNodes(body)) {
     const text = node.get()
     const found = [...detect(text, config), ...(custom ? customFindings(text, custom) : [])]
     if (found.length) {
       findings.push(...found)
       if (mode === 'redact') {
-        node.set(
-          vault
-            ? redact(text, found, {
-                token: (f) => {
-                  const t = `⟨cx:${vault.size + 1}⟩`
-                  vault.set(t, f.match)
-                  return t
-                },
-              })
-            : redact(text, found),
-        )
+        let out = vault
+          ? redact(text, found, {
+              token: (f) => {
+                const t = `⟨cx:${vault.size + 1}⟩`
+                vault.set(t, f.match)
+                return t
+              },
+            })
+          : redact(text, found)
+        if (signature && !noted) {
+          out = SIGNATURE + out
+          noted = true
+        }
+        node.set(out)
       }
     }
   }
@@ -163,7 +174,7 @@ async function handle(
   } else if ((req.method === 'POST' || req.method === 'PUT') && body.length > 0) {
     try {
       const json: unknown = JSON.parse(body.toString('utf8'))
-      const findings = processPayload(json, opts.mode, config, opts.custom, vault)
+      const findings = processPayload(json, opts.mode, config, opts.custom, vault, opts.signature)
       if (findings.length > 0) {
         stats.withFindings++
         for (const f of findings) stats.byType[f.type] = (stats.byType[f.type] ?? 0) + 1

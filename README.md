@@ -72,10 +72,11 @@ Hooks can't rewrite text, so this **blocks** — for redaction use the proxy
 
 ## What it detects
 
-40+ credential types — AWS, GitHub, GitLab, Stripe, Slack, OpenAI, Anthropic,
-Google, Azure, Twilio, SendGrid and more — plus PEM private keys, `.env` secrets,
-database connection strings, JWTs, and personal data like Luhn-valid credit-card
-numbers and IBANs. Add your own values/patterns to always redact.
+50+ credential types — AWS, GitHub, GitLab, Stripe, Slack, OpenAI, Anthropic,
+Google, Azure, Twilio, SendGrid, Figma, Atlassian, Terraform Cloud, Dropbox and
+more — plus PEM private keys, `.env` secrets, database connection strings, JWTs,
+and personal data like Luhn-valid credit-card numbers and IBANs. Add your own
+values/patterns to always redact.
 
 ## Privacy
 

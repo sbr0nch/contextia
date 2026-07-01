@@ -2,6 +2,7 @@ import type { Finding } from '@sbr0nch/contextia-engine'
 import type { Composer } from './composer.js'
 import type { Mode } from './storage.js'
 import { mask } from './mask.js'
+import { MARK_SVG } from './brand.js'
 
 export interface UIHandlers {
   onRedactAll: () => void
@@ -41,9 +42,17 @@ const STYLE = `
 .cx-indicator:active { transform: translateY(0); }
 .cx-indicator.cx-alert { color: ${DANGER}; border-color: rgba(255,93,95,.55); }
 .cx-indicator.cx-blocked { color: ${DANGER}; border-color: rgba(255,93,95,.7); background: rgba(40,20,21,.66); }
-.cx-dot { width: 6px; height: 6px; border-radius: 50%; background: ${BRAND}; box-shadow: 0 0 7px ${BRAND}88; transition: background .16s ${EASE}; }
-.cx-indicator.cx-alert .cx-dot, .cx-indicator.cx-blocked .cx-dot { background: ${DANGER}; box-shadow: 0 0 7px ${DANGER}; }
+.cx-mark { width: 15px; height: 15px; display: inline-flex; color: ${BRAND}; filter: drop-shadow(0 0 4px ${BRAND}66); transition: color .16s ${EASE}, filter .16s ${EASE}; }
+.cx-mark svg { width: 100%; height: 100%; display: block; }
+.cx-indicator.cx-alert .cx-mark, .cx-indicator.cx-blocked .cx-mark { color: ${DANGER}; filter: drop-shadow(0 0 4px ${DANGER}66); }
 .cx-count { font-variant-numeric: tabular-nums; opacity: .9; }
+
+/* clean-state card shown when the composer has no findings */
+.cx-empty { padding: 15px 14px; display: flex; align-items: center; gap: 11px; }
+.cx-emark { width: 22px; height: 22px; flex: 0 0 auto; display: inline-flex; color: ${BRAND}; }
+.cx-emark svg { width: 100%; height: 100%; }
+.cx-empty-t { font-weight: 600; color: #e9eaee; font-size: 12px; }
+.cx-empty-s { font-size: 11px; color: #7f8492; margin-top: 2px; }
 
 /* animated open/close for the floating panels */
 .cx-pop, .cx-tip, .cx-banner {
@@ -131,9 +140,11 @@ export class Hud {
 
     this.overlay = el('div', 'cx-overlay')
     this.indicator = el('div', 'cx-indicator glass')
+    const mark = el('span', 'cx-mark')
+    mark.innerHTML = MARK_SVG
     this.label = el('span', '', 'Contextia')
     this.countEl = el('span', 'cx-count')
-    this.indicator.append(el('span', 'cx-dot'), this.label, this.countEl)
+    this.indicator.append(mark, this.label, this.countEl)
     this.indicator.addEventListener('click', () => this.setOpen(!this.open))
 
     this.popover = el('div', 'cx-pop glass')
@@ -156,7 +167,6 @@ export class Hud {
     this.renderPopover(findings)
     this.drawHighlights(findings, composer)
     if (!has) {
-      this.setOpen(false)
       this.hideTip()
       this.hideBanner()
     }
@@ -185,7 +195,16 @@ export class Hud {
 
   private renderPopover(findings: Finding[]): void {
     this.popover.replaceChildren()
-    if (findings.length === 0) return
+    if (findings.length === 0) {
+      const wrap = el('div', 'cx-empty')
+      const mk = el('span', 'cx-emark')
+      mk.innerHTML = MARK_SVG
+      const txt = el('div')
+      txt.append(el('div', 'cx-empty-t', 'No secrets detected'), el('div', 'cx-empty-s', 'Contextia is watching this message.'))
+      wrap.append(mk, txt)
+      this.popover.append(wrap)
+      return
+    }
     const head = el('div', 'cx-head')
     head.append(el('span', 'cx-title', `${findings.length} secret${findings.length > 1 ? 's' : ''} detected`))
     const allowAll = el('button', 'cx-ghost', 'Allow all') as HTMLButtonElement

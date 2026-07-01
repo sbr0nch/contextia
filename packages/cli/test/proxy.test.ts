@@ -25,6 +25,23 @@ describe('textNodes / processPayload', () => {
     expect((body.messages[0]!.content[0] as { text: string }).text).toContain('⟨redacted:github_token⟩')
   })
 
+  it('adds the signature note once when enabled, and not by default', () => {
+    const make = () => ({
+      system: 'key AKIAIOSFODNN7EXAMPLE',
+      messages: [{ role: 'user', content: 'and ghp_' + 'a'.repeat(36) }],
+    })
+    const off = make()
+    processPayload(off, 'redact', configFor())
+    expect(off.system).not.toContain('Contextia')
+
+    const on = make()
+    processPayload(on, 'redact', configFor(), undefined, undefined, true)
+    const joined = on.system + '\n' + on.messages[0]!.content
+    // exactly one signature line across the whole payload
+    expect(joined.match(/redacted locally by Contextia/g)?.length).toBe(1)
+    expect(on.system.startsWith('[Secrets redacted locally by Contextia')).toBe(true)
+  })
+
   it('warn mode reports but does not modify', () => {
     const body = { messages: [{ role: 'user', content: 'AKIAIOSFODNN7EXAMPLE' }] }
     const findings = processPayload(body, 'warn', configFor())

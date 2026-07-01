@@ -3,17 +3,19 @@ import {
   getSettings,
   setSettings,
   getLog,
+  getStats,
   clearAll,
   type Mode,
   type Settings,
 } from './storage.js'
+import { MARK_SVG } from './brand.js'
 
-const MODE_LABELS: Record<Mode, string> = {
-  warn: 'Warn — flag, let me decide',
-  'auto-redact': 'Auto-redact before send',
-  block: 'Block send until resolved',
-  off: 'Off',
-}
+const MODES: { id: Mode; label: string; hint: string }[] = [
+  { id: 'warn', label: 'Warn', hint: 'Flag and let me decide' },
+  { id: 'auto-redact', label: 'Auto-redact', hint: 'Redact before send' },
+  { id: 'block', label: 'Block', hint: 'Stop send until resolved' },
+  { id: 'off', label: 'Off', hint: 'Disable on this browser' },
+]
 
 function el(tag: string, cls = '', text = ''): HTMLElement {
   const n = document.createElement(tag)
@@ -27,6 +29,10 @@ function effectiveEnabled(s: Settings): Set<string> {
   return new Set(detectors.filter((d) => d.defaultEnabled).map((d) => d.id))
 }
 
+function lines(v: string): string[] {
+  return v.split('\n').map((s) => s.trim()).filter(Boolean)
+}
+
 let settings: Settings
 
 async function persist(next: Partial<Settings>): Promise<void> {
@@ -34,109 +40,176 @@ async function persist(next: Partial<Settings>): Promise<void> {
   await setSettings(settings)
 }
 
-async function render(): Promise<void> {
-  settings = await getSettings()
-  const log = await getLog()
-  const app = document.getElementById('app')
-  if (!app) return
-  app.replaceChildren()
+function card(title: string, sub = ''): HTMLElement {
+  const c = el('section', 'cx-card')
+  const head = el('div', 'cx-card-head')
+  head.append(el('h2', '', title))
+  if (sub) head.append(el('span', 'cx-card-sub', sub))
+  c.append(head)
+  return c
+}
 
-  const brand = el('div', 'cx-brand')
-  brand.append(el('span', 'cx-mark'), el('span', '', 'Contextia settings'))
-  app.append(brand)
+function toggle(checked: boolean, onChange: (v: boolean) => void): HTMLElement {
+  const wrap = el('label', 'cx-toggle')
+  const cb = document.createElement('input')
+  cb.type = 'checkbox'
+  cb.checked = checked
+  cb.addEventListener('change', () => onChange(cb.checked))
+  wrap.append(cb, el('span', 'cx-track'))
+  return wrap
+}
 
-  // Mode
-  const modeField = el('div', 'cx-field')
-  modeField.append(el('label', '', 'Mode'))
-  const sel = document.createElement('select')
-  ;(Object.keys(MODE_LABELS) as Mode[]).forEach((m) => {
-    const o = document.createElement('option')
-    o.value = m
-    o.textContent = MODE_LABELS[m]
-    if (m === settings.mode) o.selected = true
-    sel.append(o)
-  })
-  sel.addEventListener('change', () => void persist({ mode: sel.value as Mode }))
-  modeField.append(sel)
-  app.append(modeField)
+function renderModes(app: HTMLElement): void {
+  const c = card('Protection')
+  const seg = el('div', 'cx-seg')
+  const hint = el('div', 'cx-seg-hint')
+  const paint = () => {
+    for (const b of seg.children) {
+      const on = (b as HTMLElement).dataset['mode'] === settings.mode
+      b.classList.toggle('cx-seg-on', on)
+    }
+    hint.textContent = MODES.find((m) => m.id === settings.mode)?.hint ?? ''
+  }
+  for (const m of MODES) {
+    const b = el('button', 'cx-seg-btn', m.label)
+    b.dataset['mode'] = m.id
+    b.addEventListener('click', async () => {
+      await persist({ mode: m.id })
+      paint()
+    })
+    seg.append(b)
+  }
+  c.append(seg, hint)
 
-  // Detectors
-  const detSection = el('div', 'cx-section')
-  detSection.append(el('h2', '', 'Detectors'))
+  const sigRow = el('div', 'cx-line')
+  const sigText = el('div')
+  sigText.append(
+    el('div', 'cx-line-t', 'Add a “redacted by Contextia” note'),
+    el('div', 'cx-line-s', 'Prepends one line to redacted messages. Off by default.'),
+  )
+  sigRow.append(sigText, toggle(settings.signature, (v) => void persist({ signature: v })))
+  c.append(sigRow)
+
+  app.append(c)
+  paint()
+}
+
+function renderDetectors(app: HTMLElement): void {
   const enabled = effectiveEnabled(settings)
+  const countEl = el('span', 'cx-card-sub')
+  const c = card('Detectors')
+  c.querySelector('.cx-card-head')!.append(countEl)
+
+  const bar = el('div', 'cx-bar')
+  const search = document.createElement('input')
+  search.type = 'text'
+  search.placeholder = 'Filter detectors…'
+  search.className = 'cx-search'
+  const allOn = el('button', 'cx-chip', 'All on') as HTMLButtonElement
+  const allOff = el('button', 'cx-chip', 'All off') as HTMLButtonElement
+  bar.append(search, allOn, allOff)
+  c.append(bar)
+
+  const list = el('div', 'cx-detlist')
+  const rows: { id: string; label: string; row: HTMLElement; cb: HTMLInputElement }[] = []
+
+  const updateCount = () => {
+    countEl.textContent = `${enabled.size} of ${detectors.length} on`
+  }
+  const setEnabled = (id: string, on: boolean) => {
+    if (on) enabled.add(id)
+    else enabled.delete(id)
+  }
+
   for (const d of detectors) {
-    const row = el('div', 'cx-row')
-    const left = el('div', 'cx-switch')
+    const row = el('div', 'cx-det')
+    const left = el('div', 'cx-det-l')
+    left.append(el('span', `cx-sev ${d.severity}`), el('span', 'cx-det-name', d.label), el('span', 'cx-det-sev', d.severity))
     const cb = document.createElement('input')
     cb.type = 'checkbox'
     cb.checked = enabled.has(d.id)
+    const t = el('label', 'cx-toggle')
+    t.append(cb, el('span', 'cx-track'))
     cb.addEventListener('change', () => {
-      const set = effectiveEnabled(settings)
-      if (cb.checked) set.add(d.id)
-      else set.delete(d.id)
-      void persist({ enabledDetectors: [...set] })
+      setEnabled(d.id, cb.checked)
+      void persist({ enabledDetectors: [...enabled] })
+      updateCount()
     })
-    const lbl = el('span')
-    lbl.append(el('span', `cx-sev ${d.severity}`), document.createTextNode(d.label))
-    left.append(cb, lbl)
-    row.append(left, el('span', 'cx-muted', d.severity))
-    detSection.append(row)
+    row.append(left, t)
+    list.append(row)
+    rows.push({ id: d.id, label: d.label.toLowerCase(), row, cb })
   }
-  app.append(detSection)
 
-  // Allowlists
-  const allowSection = el('div', 'cx-section')
-  allowSection.append(el('h2', '', 'Allowlist'))
-  const valField = el('div', 'cx-field')
-  valField.append(el('label', '', 'Allowed values (one per line)'))
-  const valTa = document.createElement('textarea')
-  valTa.value = settings.allowlist.values.join('\n')
-  valField.append(valTa)
-  const patField = el('div', 'cx-field')
-  patField.append(el('label', '', 'Allowed patterns — regex (one per line)'))
-  const patTa = document.createElement('textarea')
-  patTa.value = settings.allowlist.patterns.join('\n')
-  patField.append(patTa)
-  const save = el('button', 'cx-primary', 'Save allowlist') as HTMLButtonElement
-  save.addEventListener('click', () =>
-    void persist({
-      allowlist: {
-        values: lines(valTa.value),
-        patterns: lines(patTa.value),
-      },
-    }),
-  )
-  allowSection.append(valField, patField, save)
-  app.append(allowSection)
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase()
+    for (const r of rows) r.row.style.display = !q || r.label.includes(q) ? '' : 'none'
+  })
+  const bulk = (on: boolean) => {
+    for (const r of rows) {
+      if (r.row.style.display === 'none') continue // only affect what's visible
+      r.cb.checked = on
+      setEnabled(r.id, on)
+    }
+    void persist({ enabledDetectors: [...enabled] })
+    updateCount()
+  }
+  allOn.addEventListener('click', () => bulk(true))
+  allOff.addEventListener('click', () => bulk(false))
 
-  // Custom "always redact" — the user's own sensitive data
-  const redactSection = el('div', 'cx-section')
-  redactSection.append(el('h2', '', 'Always redact (your data)'))
-  const rValField = el('div', 'cx-field')
-  rValField.append(el('label', '', 'Values to always redact (one per line)'))
-  const rValTa = document.createElement('textarea')
-  rValTa.value = settings.redactlist.values.join('\n')
-  rValField.append(rValTa)
-  const rPatField = el('div', 'cx-field')
-  rPatField.append(el('label', '', 'Patterns to always redact — regex (one per line)'))
-  const rPatTa = document.createElement('textarea')
-  rPatTa.value = settings.redactlist.patterns.join('\n')
-  rPatField.append(rPatTa)
-  const rSave = el('button', 'cx-primary', 'Save redaction list') as HTMLButtonElement
-  rSave.addEventListener('click', () =>
-    void persist({
-      redactlist: {
-        values: lines(rValTa.value),
-        patterns: lines(rPatTa.value),
-      },
-    }),
-  )
-  redactSection.append(rValField, rPatField, rSave)
-  app.append(redactSection)
+  c.append(list)
+  app.append(c)
+  updateCount()
+}
 
-  // Log
-  const logSection = el('div', 'cx-section')
-  logSection.append(el('h2', '', `Detections log (${log.length})`))
+function renderAllowlists(app: HTMLElement): void {
+  const c = card('Allow & redact lists')
+  const grid = el('div', 'cx-two')
+
+  const allow = el('div', 'cx-field')
+  allow.append(el('label', '', 'Allow (never flag) — values'))
+  const allowVal = document.createElement('textarea')
+  allowVal.value = settings.allowlist.values.join('\n')
+  allowVal.placeholder = 'one value per line'
+  allow.append(allowVal, el('label', '', 'Allow — regex patterns'))
+  const allowPat = document.createElement('textarea')
+  allowPat.value = settings.allowlist.patterns.join('\n')
+  allowPat.placeholder = 'one regex per line'
+  allow.append(allowPat)
+
+  const redact = el('div', 'cx-field')
+  redact.append(el('label', '', 'Always redact (your data) — values'))
+  const redVal = document.createElement('textarea')
+  redVal.value = settings.redactlist.values.join('\n')
+  redVal.placeholder = 'one value per line'
+  redact.append(redVal, el('label', '', 'Always redact — regex patterns'))
+  const redPat = document.createElement('textarea')
+  redPat.value = settings.redactlist.patterns.join('\n')
+  redPat.placeholder = 'one regex per line'
+  redact.append(redPat)
+
+  grid.append(allow, redact)
+  c.append(grid)
+
+  const save = el('button', 'cx-primary', 'Save lists') as HTMLButtonElement
+  const saved = el('span', 'cx-saved', 'Saved')
+  save.addEventListener('click', async () => {
+    await persist({
+      allowlist: { values: lines(allowVal.value), patterns: lines(allowPat.value) },
+      redactlist: { values: lines(redVal.value), patterns: lines(redPat.value) },
+    })
+    saved.classList.add('cx-saved-on')
+    setTimeout(() => saved.classList.remove('cx-saved-on'), 1400)
+  })
+  const actions = el('div', 'cx-actions')
+  actions.append(save, saved)
+  c.append(actions)
+  app.append(c)
+}
+
+async function renderActivity(app: HTMLElement): Promise<void> {
+  const [log, stats] = await Promise.all([getLog(), getStats()])
+  const c = card('Activity', `${stats.caught} caught · ${stats.allowed} allowed · ${stats.leaked} leaked`)
+
   const list = el('div', 'cx-log')
   if (log.length === 0) list.append(el('div', 'cx-muted', 'Nothing logged yet.'))
   for (const e of log.slice(0, 50)) {
@@ -146,7 +219,8 @@ async function render(): Promise<void> {
     row.append(left, el('span', 'cx-muted', e.action))
     list.append(row)
   }
-  logSection.append(list)
+  c.append(list)
+
   const clear = el('button', '', 'Clear log & stats') as HTMLButtonElement
   clear.addEventListener('click', async () => {
     await clearAll()
@@ -154,15 +228,26 @@ async function render(): Promise<void> {
   })
   const actions = el('div', 'cx-actions')
   actions.append(clear)
-  logSection.append(actions)
-  app.append(logSection)
+  c.append(actions)
+  app.append(c)
 }
 
-function lines(v: string): string[] {
-  return v
-    .split('\n')
-    .map((s) => s.trim())
-    .filter(Boolean)
+async function render(): Promise<void> {
+  settings = await getSettings()
+  const app = document.getElementById('app')
+  if (!app) return
+  app.replaceChildren()
+
+  const brand = el('div', 'cx-brand')
+  const mark = el('span', 'cx-mark')
+  mark.innerHTML = MARK_SVG
+  brand.append(mark, el('span', '', 'Contextia'))
+  app.append(brand)
+
+  renderModes(app)
+  renderDetectors(app)
+  renderAllowlists(app)
+  await renderActivity(app)
 }
 
 void render()

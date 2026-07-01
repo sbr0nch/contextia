@@ -16,6 +16,8 @@ export interface Settings {
   allowlist: Allowlist
   /** The user's own values/patterns to always flag and redact. */
   redactlist: Allowlist
+  /** Append a one-line note that Contextia redacted the text. Off by default. */
+  signature: boolean
 }
 
 export type LogAction = 'flagged' | 'redacted' | 'allowed' | 'blocked'
@@ -42,6 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
   severityOverrides: {},
   allowlist: { values: [], patterns: [] },
   redactlist: { values: [], patterns: [] },
+  signature: false,
 }
 
 const SETTINGS_KEY = 'settings'

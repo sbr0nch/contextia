@@ -1,5 +1,6 @@
 import { getSettings, setSettings, getStats, getLog, clearAll, type Mode } from './storage.js'
 import { api } from './api.js'
+import { MARK_SVG } from './brand.js'
 
 const MODE_LABELS: Record<Mode, string> = {
   warn: 'Warn — flag, let me decide',
@@ -39,7 +40,9 @@ async function render(): Promise<void> {
   app.replaceChildren()
 
   const brand = el('div', 'cx-brand')
-  brand.append(el('span', 'cx-mark'), el('span', '', 'Contextia'))
+  const mark = el('span', 'cx-mark')
+  mark.innerHTML = MARK_SVG
+  brand.append(mark, el('span', '', 'Contextia'))
 
   const headline = el('div', 'cx-headline')
   const num = document.createElement('b')

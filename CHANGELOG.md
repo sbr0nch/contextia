@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.0
+
+- 11 more detectors (58 total): Figma, Airtable, Terraform Cloud, Dropbox, xAI
+  (Grok), Flutterwave, Razorpay, Fireworks AI, Atlassian, and Tailscale tokens.
+- Optional one-line "redacted by Contextia" note on redacted requests — a signal
+  to the model that the placeholders are deliberate. On by default in the CLI
+  proxy (disable with `--no-signature`); off by default in the extension (a
+  toggle in settings).
+- Browser extension: composer detection now handles shadow-DOM-mounted editors
+  and nested focus; redesigned, searchable settings; the logo across the in-page
+  badge, popup, and options; and a clean-state card when nothing is flagged.
+
 ## v1.1.0
 
 - 6 more detectors (47 total): OpenRouter, Groq, Perplexity, Replicate, Notion,

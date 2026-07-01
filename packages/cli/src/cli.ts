@@ -103,6 +103,7 @@ function cmdProxy(): void {
     all: flags.has('--all'),
     custom: parseCustom(flagValue('--redact-file')),
     reversible: flags.has('--reversible'),
+    signature: !flags.has('--no-signature'),
     onFinding: findingLogger(mode),
   })
 }
@@ -116,6 +117,7 @@ function cmdRun(): void {
   let mode = 'redact'
   let all = false
   let reversible = false
+  let signature = true
   let upstream: string | undefined
   let redactFile: string | undefined
   let i = 0
@@ -124,6 +126,7 @@ function cmdRun(): void {
     if (a === '--') { i++; break } // explicit separator: command starts after it
     if (a === '--all') { all = true; continue }
     if (a === '--reversible') { reversible = true; continue }
+    if (a === '--no-signature') { signature = false; continue }
     const valued = (name: string): string | undefined =>
       a === name ? rest[++i] : a.startsWith(name + '=') ? a.slice(name.length + 1) : undefined
     const m = valued('--mode'); if (m !== undefined) { mode = m; continue }
@@ -135,7 +138,7 @@ function cmdRun(): void {
   const cmd = rest[i]
   const cmdArgs = rest.slice(i + 1)
   if (!cmd) {
-    process.stderr.write('contextia: usage: contextia run [--mode m] [--all] [--reversible] [--redact-file p] [--] <command> [args...]\n')
+    process.stderr.write('contextia: usage: contextia run [--mode m] [--all] [--reversible] [--no-signature] [--redact-file p] [--] <command> [args...]\n')
     process.exit(2)
   }
   if (!validMode(mode)) return
@@ -147,6 +150,7 @@ function cmdRun(): void {
     all,
     custom: parseCustom(redactFile),
     reversible,
+    signature,
     onFinding: findingLogger(mode),
   })
   server.listen(0, '127.0.0.1', () => {
@@ -210,6 +214,8 @@ Options:
                        data to always redact, on top of detected secrets
   --reversible         (proxy, redact mode) restore the original values in the
                        LLM's response via a local vault (buffers the response)
+  --no-signature       (proxy, redact mode) don't prepend the one-line
+                       "redacted by Contextia" note to redacted requests
 
 Examples:
   contextia scan .env src/                       # check files for secrets

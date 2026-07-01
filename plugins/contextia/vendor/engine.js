@@ -748,6 +748,16 @@ var RE_12 = new RegExp("\\bpplx-[A-Za-z0-9]{40,}\\b", "g");
 var RE_13 = new RegExp("\\br8_[A-Za-z0-9]{37}\\b", "g");
 var RE_14 = new RegExp("\\bntn_[0-9A-Za-z]{40,}\\b", "g");
 var RE_15 = new RegExp("\\b[MNO][A-Za-z0-9_-]{23,25}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{27,38}\\b", "g");
+var RE_16 = new RegExp("\\bfigd_[0-9A-Za-z_.-]{40,}\\b", "g");
+var RE_17 = new RegExp("\\bpat[0-9A-Za-z]{14}\\.[0-9A-Za-z_-]{40,}\\b", "g");
+var RE_18 = new RegExp("\\b[A-Za-z0-9]{14}\\.atlasv1\\.[A-Za-z0-9_-]{60,}\\b", "g");
+var RE_19 = new RegExp("\\bsl\\.[A-Za-z0-9_-]{130,}\\b", "g");
+var RE_20 = new RegExp("\\bxai-[A-Za-z0-9]{80}\\b", "g");
+var RE_21 = new RegExp("\\bFLWSECK[_-][0-9A-Za-z-]{20,}\\b", "g");
+var RE_22 = new RegExp("\\brzp_(?:live|test)_[0-9A-Za-z]{14,}\\b", "g");
+var RE_23 = new RegExp("\\bfw_[0-9A-Za-z]{24,}\\b", "g");
+var RE_24 = new RegExp("\\bATATT3x[A-Za-z0-9_=+/.-]{150,}\\b", "g");
+var RE_25 = new RegExp("\\btskey-(?:auth|api|client)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{20,}\\b", "g");
 var generated = [
   {
     id: "mailchimp_key",
@@ -876,6 +886,86 @@ var generated = [
     defaultEnabled: true,
     scan: (text) => matchAll(RE_15, text),
     fixtures: { positives: ["Maaaaaaaaaaaaaaaaaaaaaaa.aaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaa", "NAAAAAAAAAAAAAAAAAAAAAAAAA.AAAAAA.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["Maaaaaaaaaa.aaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaa", "Xaaaaaaaaaaaaaaaaaaaaaaa.aaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaa", "a discord server"] }
+  },
+  {
+    id: "figma_token",
+    label: "Figma personal access token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_16, text),
+    fixtures: { positives: ["figd_aaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbb", "figd_AAAAAAAAAAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBBBB"], negatives: ["figd_short", "figx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a figma file"] }
+  },
+  {
+    id: "airtable_pat",
+    label: "Airtable personal access token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_17, text),
+    fixtures: { positives: ["pataaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbb-cccccccccccccccccccc", "patAAAAAAAAAAAAAA.00000000000000000000_11111111111111111111"], negatives: ["pataaaaaaaaaaaaaa.short", "patshort", "a patch file"] }
+  },
+  {
+    id: "terraform_cloud_token",
+    label: "Terraform Cloud API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_18, text),
+    fixtures: { positives: ["aaaaaaaaaaaaaa.atlasv1.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "AAAAAAAAAAAAAA.atlasv1.0000000000000000000000000000000000000000000000000000000000000000000000"], negatives: ["aaaaaaaaaaaaaa.atlasv2.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "short.atlasv1.short", "a terraform plan"] }
+  },
+  {
+    id: "dropbox_token",
+    label: "Dropbox access token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_19, text),
+    fixtures: { positives: ["sl.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sl.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["sl.short", "sl_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a slack message"] }
+  },
+  {
+    id: "xai_key",
+    label: "xAI (Grok) API key",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_20, text),
+    fixtures: { positives: ["xai-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "xai-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["xai-short", "xai-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "an xai model"] }
+  },
+  {
+    id: "flutterwave_secret",
+    label: "Flutterwave secret key",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_21, text),
+    fixtures: { positives: ["FLWSECK-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "FLWSECK_TEST-AAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["FLWSECK-short", "FLWPUBK-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a flutterwave payment"] }
+  },
+  {
+    id: "razorpay_key",
+    label: "Razorpay API key",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_22, text),
+    fixtures: { positives: ["rzp_live_aaaaaaaaaaaaaa", "rzp_test_AAAAAAAAAAAAAAAAAA"], negatives: ["rzp_live_short", "rzp_prod_aaaaaaaaaaaaaa", "a razorpay order"] }
+  },
+  {
+    id: "fireworks_key",
+    label: "Fireworks AI API key",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_23, text),
+    fixtures: { positives: ["fw_aaaaaaaaaaaaaaaaaaaaaaaa", "fw_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["fw_short", "fwd_aaaaaaaaaaaaaaaaaaaaaaaa", "a firmware update"] }
+  },
+  {
+    id: "atlassian_token",
+    label: "Atlassian API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_24, text),
+    fixtures: { positives: ["ATATT3xFfGF0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "ATATT3xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["ATATT3x_short", "ATATTshort", "an atlassian ticket"] }
+  },
+  {
+    id: "tailscale_key",
+    label: "Tailscale auth key",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_25, text),
+    fixtures: { positives: ["tskey-auth-aaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "tskey-api-AAAAAAAAAAAAAAAA-000000000000000000000000000000"], negatives: ["tskey-auth-short", "tskey-xxxx-aaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "a tailscale node"] }
   }
 ];
 

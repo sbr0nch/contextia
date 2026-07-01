@@ -136,9 +136,19 @@ function doRedactOne(f: Finding): void {
   setTimeout(scan, 0)
 }
 
+// A single, functional note: it tells the model the placeholders are deliberate
+// redactions (so it won't ask for the values) and carries attribution. One line,
+// opt-in, and never duplicated.
+const SIGNATURE_MARK = 'redacted locally by Contextia'
+function withSignature(text: string, count: number): string {
+  if (!settings.signature || text.includes(SIGNATURE_MARK)) return text
+  const s = count === 1 ? 'secret' : 'secrets'
+  return `[${count} ${s} ${SIGNATURE_MARK} — contextia.dev]\n${text}`
+}
+
 function doRedact(action: LogAction): void {
   if (!composer || findings.length === 0) return
-  const redacted = redact(composer.getText(), findings)
+  const redacted = withSignature(redact(composer.getText(), findings), findings.length)
   composer.setText(redacted)
   void bumpStats({ redacted: findings.length })
   void appendLog(findings.map((f) => entry(f, action)))
