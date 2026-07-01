@@ -4,8 +4,22 @@
 // runs on-device via the Contextia CLI — nothing is sent anywhere.
 //
 // Requires the CLI: npm i -g @sbr0nch/contextia
-import { readFileSync } from 'node:fs'
+import { readFileSync, appendFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+
+// TEMP diagnostic log (removed once we confirm the hook wiring on Windows).
+const LOG = join(homedir(), 'contextia-guard-debug.log')
+const log = (m) => {
+  try {
+    appendFileSync(LOG, `${new Date().toISOString()} ${m}\n`)
+  } catch {
+    /* ignore */
+  }
+}
+
+log('--- hook fired ---')
 
 function readStdin() {
   try {
@@ -16,30 +30,34 @@ function readStdin() {
 }
 
 const raw = readStdin()
+log(`stdin bytes=${raw.length}`)
 let prompt = raw
 try {
   const payload = JSON.parse(raw)
-  // The prompt field name isn't formally documented; fall back to the whole
-  // payload (which still contains the prompt) so a secret is never missed.
   prompt = payload.prompt ?? payload.user_input ?? raw
+  log(`parsed json; prompt field len=${(payload.prompt ?? payload.user_input ?? '').length}`)
 } catch {
-  // stdin wasn't JSON — scan it as-is
+  log('stdin not json; scanning raw')
 }
 
 const scan = spawnSync('contextia', ['scan', '--json'], { input: prompt, encoding: 'utf8' })
+log(`scan spawn error=${scan.error ? scan.error.code : 'none'} status=${scan.status}`)
+log(`scan stdout=${(scan.stdout || '').slice(0, 200)}`)
 
-// Allow the prompt through unless a secret was actually found. Fail open if the
-// CLI isn't installed (exit 2 would block every prompt) — the README covers setup.
-if (scan.error || scan.status !== 1) process.exit(0)
+if (scan.error || scan.status !== 1) {
+  log('allow (no secret / cli missing / error)')
+  process.exit(0)
+}
 
 let types = []
 try {
   types = [...new Set((JSON.parse(scan.stdout) ?? []).map((f) => f.type))]
 } catch {
-  // keep types empty; still block
+  /* keep types empty; still block */
 }
 
 const what = types.length ? types.join(', ') : 'a secret'
+log(`BLOCK types=${what}`)
 process.stdout.write(
   JSON.stringify({
     decision: 'block',
