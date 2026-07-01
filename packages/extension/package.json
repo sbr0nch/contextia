@@ -14,11 +14,11 @@
     "package:firefox": "node build.mjs --firefox && node pack.mjs dist-firefox"
   },
   "devDependencies": {
-    "@types/chrome": "^0.0.287",
-    "esbuild": "^0.24.2",
-    "happy-dom": "^15.11.7",
+    "@types/chrome": "^0.2.1",
+    "esbuild": "^0.28.1",
+    "happy-dom": "^20.10.6",
     "playwright": "^1.61.1",
-    "vitest": "^2.1.9"
+    "vitest": "^4.1.9"
   },
   "dependencies": {
     "@sbr0nch/contextia-engine": "*"
