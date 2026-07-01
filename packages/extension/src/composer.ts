@@ -12,7 +12,8 @@ export interface Composer {
 const SELECTORS = [
   '#prompt-textarea', // ChatGPT
   'div.ProseMirror[contenteditable="true"]', // Claude / ProseMirror
-  'main textarea',
+  'div.ql-editor[contenteditable="true"]', // Gemini / AI Studio (Quill)
+  'main textarea', // Perplexity, DeepSeek, and others
   'textarea[enterkeyhint], textarea[data-id]',
   'div[contenteditable="true"]',
 ]

@@ -15,7 +15,8 @@ no analytics, no telemetry, and no third parties.
 ## What Contextia processes
 
 To do its job, the extension reads the text you type or paste into the chat
-composer on the supported sites (chatgpt.com and claude.ai) and scans it locally
+composer on the supported AI chat sites (ChatGPT, Claude, Gemini, Google AI
+Studio, Microsoft Copilot, Perplexity, DeepSeek) and scans it locally
 for credential patterns. This processing happens entirely in your browser, in
 memory. The text you type is never transmitted anywhere by Contextia.
 
@@ -42,7 +43,7 @@ You can clear all of this at any time from the extension's popup or options page
 
 - **`storage`** — to save your settings and the local log on your device.
 - **Host access to `chatgpt.com` and `claude.ai` only** — so the extension can
-  read the composer on those two sites. Contextia requests no other host access.
+  read the composer on those AI chat sites. Contextia requests no other host access.
 
 ## Data sharing
 

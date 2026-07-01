@@ -34,7 +34,7 @@ What it does:
 
 Privacy by construction:
 • Zero network requests. No accounts, no servers, no telemetry, no third parties.
-• Runs only on chatgpt.com and claude.ai. Requests no other access.
+• Runs only on supported AI chat sites (ChatGPT, Claude, Gemini, Copilot, Perplexity, DeepSeek). Requests no other access.
 • Open source (MIT) — audit every line: https://github.com/sbr0nch/contextia
 
 Contextia is a safety net, not a guarantee: rule-based detection can miss things,
@@ -47,8 +47,10 @@ them before submitting — entirely on-device.
 ## Permission justifications (required)
 - storage: persist the user's settings, allow/redact lists, and a local detections
   log on the device. Nothing is synced or transmitted.
-- host access (chatgpt.com, claude.ai): read the composer text on those two sites
-  to scan it locally. No other hosts are requested. No remote code, no network.
+- host access (chatgpt.com, claude.ai, gemini.google.com, aistudio.google.com,
+  copilot.microsoft.com, www.perplexity.ai, chat.deepseek.com): read the composer
+  text on these AI chat sites to scan it locally. No other hosts are requested.
+  No remote code, no network.
 
 ## Data usage disclosures (store privacy form)
 - Does this item collect or use user data? No data is collected or transmitted.

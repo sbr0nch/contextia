@@ -78,5 +78,53 @@
     "pattern": "\\bpscale_tkn_[A-Za-z0-9_-]{32,}\\b",
     "positives": ["pscale_tkn_{a:32}", "pscale_tkn_{A:40}"],
     "negatives": ["pscale_tkn_short", "pscale_pw_{a:32}", "a planetscale db"]
+  },
+  {
+    "id": "openrouter_key",
+    "label": "OpenRouter API key",
+    "severity": "critical",
+    "pattern": "\\bsk-or-v1-[0-9a-f]{40,}\\b",
+    "positives": ["sk-or-v1-{a:40}", "sk-or-v1-{0:50}"],
+    "negatives": ["sk-or-v1-short", "sk-or-v2-{a:40}", "an openrouter model"]
+  },
+  {
+    "id": "groq_key",
+    "label": "Groq API key",
+    "severity": "critical",
+    "pattern": "\\bgsk_[A-Za-z0-9]{52}\\b",
+    "positives": ["gsk_{a:52}", "gsk_{A:52}"],
+    "negatives": ["gsk_short", "gsk_{a:51}", "a groq request"]
+  },
+  {
+    "id": "perplexity_key",
+    "label": "Perplexity API key",
+    "severity": "critical",
+    "pattern": "\\bpplx-[A-Za-z0-9]{40,}\\b",
+    "positives": ["pplx-{a:48}", "pplx-{A:40}"],
+    "negatives": ["pplx-short", "pplx-{a:39}", "a perplexity search"]
+  },
+  {
+    "id": "replicate_token",
+    "label": "Replicate API token",
+    "severity": "critical",
+    "pattern": "\\br8_[A-Za-z0-9]{37}\\b",
+    "positives": ["r8_{a:37}", "r8_{A:37}"],
+    "negatives": ["r8_short", "r8_{a:36}", "a replicate model"]
+  },
+  {
+    "id": "notion_token",
+    "label": "Notion integration token",
+    "severity": "critical",
+    "pattern": "\\bntn_[0-9A-Za-z]{40,}\\b",
+    "positives": ["ntn_{a:46}", "ntn_{A:40}"],
+    "negatives": ["ntn_short", "ntn_{a:39}", "a notion page"]
+  },
+  {
+    "id": "discord_bot_token",
+    "label": "Discord bot token",
+    "severity": "critical",
+    "pattern": "\\b[MNO][A-Za-z0-9_-]{23,25}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{27,38}\\b",
+    "positives": ["M{a:23}.{a:6}.{a:27}", "N{A:25}.{A:6}.{A:38}"],
+    "negatives": ["M{a:10}.{a:6}.{a:27}", "X{a:23}.{a:6}.{a:27}", "a discord server"]
   }
 ]

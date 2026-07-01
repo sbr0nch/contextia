@@ -13,6 +13,12 @@ const RE_6 = new RegExp("\\bdapi[0-9a-f]{32}\\b", "g")
 const RE_7 = new RegExp("\\b\\d{8,10}:[A-Za-z0-9_-]{35}\\b", "g")
 const RE_8 = new RegExp("\\bxkeysib-[a-f0-9]{64}-[A-Za-z0-9]{16}\\b", "g")
 const RE_9 = new RegExp("\\bpscale_tkn_[A-Za-z0-9_-]{32,}\\b", "g")
+const RE_10 = new RegExp("\\bsk-or-v1-[0-9a-f]{40,}\\b", "g")
+const RE_11 = new RegExp("\\bgsk_[A-Za-z0-9]{52}\\b", "g")
+const RE_12 = new RegExp("\\bpplx-[A-Za-z0-9]{40,}\\b", "g")
+const RE_13 = new RegExp("\\br8_[A-Za-z0-9]{37}\\b", "g")
+const RE_14 = new RegExp("\\bntn_[0-9A-Za-z]{40,}\\b", "g")
+const RE_15 = new RegExp("\\b[MNO][A-Za-z0-9_-]{23,25}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{27,38}\\b", "g")
 
 export const generated: Detector[] = [
   {
@@ -94,5 +100,53 @@ export const generated: Detector[] = [
     defaultEnabled: true,
     scan: (text) => matchAll(RE_9, text),
     fixtures: { positives: ["pscale_tkn_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","pscale_tkn_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["pscale_tkn_short","pscale_pw_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a planetscale db"] },
+  },
+  {
+    id: "openrouter_key",
+    label: "OpenRouter API key",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_10, text),
+    fixtures: { positives: ["sk-or-v1-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sk-or-v1-00000000000000000000000000000000000000000000000000"], negatives: ["sk-or-v1-short","sk-or-v2-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","an openrouter model"] },
+  },
+  {
+    id: "groq_key",
+    label: "Groq API key",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_11, text),
+    fixtures: { positives: ["gsk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","gsk_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["gsk_short","gsk_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a groq request"] },
+  },
+  {
+    id: "perplexity_key",
+    label: "Perplexity API key",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_12, text),
+    fixtures: { positives: ["pplx-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","pplx-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["pplx-short","pplx-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a perplexity search"] },
+  },
+  {
+    id: "replicate_token",
+    label: "Replicate API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_13, text),
+    fixtures: { positives: ["r8_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","r8_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["r8_short","r8_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a replicate model"] },
+  },
+  {
+    id: "notion_token",
+    label: "Notion integration token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_14, text),
+    fixtures: { positives: ["ntn_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","ntn_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["ntn_short","ntn_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a notion page"] },
+  },
+  {
+    id: "discord_bot_token",
+    label: "Discord bot token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_15, text),
+    fixtures: { positives: ["Maaaaaaaaaaaaaaaaaaaaaaa.aaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaa","NAAAAAAAAAAAAAAAAAAAAAAAAA.AAAAAA.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["Maaaaaaaaaa.aaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaa","Xaaaaaaaaaaaaaaaaaaaaaaa.aaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaa","a discord server"] },
   },
 ]

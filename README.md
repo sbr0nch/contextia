@@ -43,12 +43,18 @@ ANTHROPIC_BASE_URL=http://localhost:8787 claude   # point your agent at it
 `--reversible` swaps each secret for a local token and restores the originals in
 the model's reply, so the answer stays usable while the real value never leaves.
 
+Works with any agent that lets you set its API base URL — **Claude Code, Cursor,
+Windsurf, aider, or your own API scripts**. Either use `contextia run -- <agent>`
+(it wires everything up), or point the agent's base URL at the proxy manually
+(env var, or the app's model/API settings for Cursor and Windsurf).
+
 ## Browser extension
 
-Live detection in the chat composer on **chatgpt.com** and **claude.ai**: findings
-are underlined inline, with Redact / Allow once / Allow all / Allow pattern, and
-modes for Warn, Auto-redact, Block, or Off. Build it from `packages/extension`
-(`npm run build`) and load `dist/` unpacked, or install from the browser stores.
+Live detection in the chat composer on **ChatGPT, Claude, Gemini, Google AI
+Studio, Microsoft Copilot, Perplexity and DeepSeek**: findings are underlined
+inline, with Redact / Allow once / Allow all / Allow pattern, and modes for Warn,
+Auto-redact, Block, or Off. Build it from `packages/extension` (`npm run build`)
+and load `dist/` unpacked, or install from the browser stores.
 
 ## Claude Code plugin
 
