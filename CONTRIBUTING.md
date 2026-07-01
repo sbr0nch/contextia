@@ -28,6 +28,28 @@ The generator refuses to emit a detector whose fixtures don't hold. For logic
 that needs code (checksums, pairing), add a module under
 `packages/engine/src/detectors/` and register it.
 
+## Extension points
+
+Contextia is built to be embedded and wrapped without forking. These seams are
+stable; keep them working:
+
+- **Engine `Config`** — `detect(text, config)` and `redact()` are pure functions.
+  Pass a `Config` to scope detectors and apply allowlists. No global state.
+- **CLI proxy `onFinding`** — `createProxyServer`/`startProxy` accept an
+  `onFinding(findings, { path })` callback and a full `Config`, so a wrapper can
+  observe detections and inject policy at startup.
+- **Plugin `CONTEXTIA_CONFIG`** — the Claude Code plugin reads an optional JSON
+  config file (engine `Config` shape) from this env var; unset → defaults.
+- **Extension settings** — the extension reads its `Config` from
+  `chrome.storage`, so settings can be provisioned externally.
+- **Secret-free telemetry contract** — `LogEntry` is exactly
+  `{ ts, site, type, severity, action }`, produced by `logEntryFor()`. The matched
+  value never enters a log or stat. This shape is stable; don't add the secret.
+
+Any build that needs network, reporting, or central policy must add it in a
+separate layer that wraps these seams — the engine and the OSS surfaces stay
+on-device with zero network calls.
+
 ## Commits
 
 Conventional Commits style, e.g. `feat(engine): add Twilio detector`. Keep

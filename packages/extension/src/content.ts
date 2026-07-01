@@ -9,6 +9,7 @@ import {
   setSettings,
   appendLog,
   bumpStats,
+  logEntryFor,
   type LogAction,
   type LogEntry,
   type Settings,
@@ -222,7 +223,7 @@ function logNew(fs: Finding[]): void {
 }
 
 function entry(f: Finding, action: LogAction): LogEntry {
-  return { ts: Date.now(), site: SITE, type: f.type, severity: f.severity, action }
+  return logEntryFor(f, SITE, action, Date.now())
 }
 
 function debounce<T extends (...a: never[]) => void>(fn: T, ms: number): T {

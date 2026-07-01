@@ -14,6 +14,19 @@ function readStdin() {
   }
 }
 
+// Optional config injection: point CONTEXTIA_CONFIG at a JSON file to tune
+// detectors and allowlists (the same shape the engine's `Config` accepts). Absent
+// or unreadable → engine defaults. This reads a local file only; nothing is fetched.
+function loadConfig() {
+  const path = process.env.CONTEXTIA_CONFIG
+  if (!path) return undefined
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return undefined
+  }
+}
+
 const raw = readStdin()
 let prompt = raw
 try {
@@ -25,7 +38,7 @@ try {
   // stdin wasn't JSON — scan it as-is
 }
 
-const findings = detect(prompt)
+const findings = detect(prompt, loadConfig())
 if (findings.length === 0) process.exit(0)
 
 const types = [...new Set(findings.map((f) => f.type))].join(', ')

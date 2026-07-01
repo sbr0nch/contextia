@@ -1,4 +1,4 @@
-import type { Config, Severity } from '@sbr0nch/contextia-engine'
+import type { Config, Severity, Finding } from '@sbr0nch/contextia-engine'
 import { api } from './api.js'
 
 export type Mode = 'warn' | 'auto-redact' | 'block' | 'off'
@@ -68,6 +68,21 @@ export function toEngineConfig(s: Settings): Config {
     severityOverrides: s.severityOverrides,
     allowlist: { values: s.allowlist.values, patterns: s.allowlist.patterns },
   }
+}
+
+/**
+ * Build a detection log record from a finding. The matched secret value
+ * (`finding.match`) is deliberately never read, so the log stays secret-free by
+ * construction — enforced by test. This is the stable, secret-free telemetry
+ * contract any embedder can rely on.
+ */
+export function logEntryFor(
+  finding: Pick<Finding, 'type' | 'severity'>,
+  site: string,
+  action: LogAction,
+  ts: number,
+): LogEntry {
+  return { ts, site, type: finding.type, severity: finding.severity, action }
 }
 
 export async function getLog(): Promise<LogEntry[]> {

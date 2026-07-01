@@ -9,6 +9,7 @@ import {
   getStats,
   bumpStats,
   clearAll,
+  logEntryFor,
   type LogEntry,
 } from '../src/storage.js'
 
@@ -59,6 +60,16 @@ describe('detections log', () => {
     const log = await getLog()
     expect(Object.keys(log[0] ?? {}).sort()).toEqual(['action', 'severity', 'site', 'ts', 'type'])
     expect(JSON.stringify(log)).not.toMatch(/match|secret|value/i)
+  })
+
+  // Locked at the source: even handed a finding that carries a secret, the log
+  // builder drops the value by construction.
+  it('logEntryFor never lets the matched secret into the record', () => {
+    const secret = 'AKIA_TOTALLY_SECRET_VALUE_1234567890'
+    const finding = { type: 'aws_access_key_id', severity: 'critical' as const, match: secret }
+    const e = logEntryFor(finding, 'chatgpt.com', 'flagged', 1)
+    expect(JSON.stringify(e)).not.toContain(secret)
+    expect(Object.keys(e).sort()).toEqual(['action', 'severity', 'site', 'ts', 'type'])
   })
 })
 

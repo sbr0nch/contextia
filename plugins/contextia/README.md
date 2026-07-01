@@ -22,6 +22,27 @@ it and tells you what was found — remove it and send again.
 /plugin                                 # menu: enable, disable, or uninstall
 ```
 
+## Configuration (optional)
+
+By default the plugin blocks on the critical detectors. To customise which
+detectors run, or to add allowlists, set `CONTEXTIA_CONFIG` to a JSON file using
+the engine's `Config` shape:
+
+```jsonc
+// contextia.config.json
+{
+  "enabledDetectors": ["aws_access_key_id", "aws_secret_access_key", "github_token"],
+  "allowlist": { "values": ["AKIAEXAMPLE"], "patterns": ["EXAMPLE_[A-Z]+"] }
+}
+```
+
+```
+export CONTEXTIA_CONFIG=/path/to/contextia.config.json
+```
+
+If the variable is unset or the file can't be read, the engine defaults apply.
+It reads a local file only — nothing is fetched.
+
 ## Notes
 
 - It **blocks**; it does not rewrite. Claude Code hooks can't edit the prompt
