@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.1.0
+
+- 6 more detectors (47 total): OpenRouter, Groq, Perplexity, Replicate, Notion,
+  and Discord bot tokens.
+- The browser extension now runs on Gemini, Google AI Studio, Microsoft Copilot,
+  Perplexity, and DeepSeek, in addition to ChatGPT and Claude.
+- Documented proxy use with any base-URL-configurable agent (Claude Code, Cursor,
+  Windsurf, aider, API scripts).
+
 ## v1.0.0
 
 First stable release. One on-device engine across four surfaces: the terminal

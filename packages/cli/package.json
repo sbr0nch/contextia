@@ -1,6 +1,6 @@
 {
   "name": "@sbr0nch/contextia",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Contextia secret detection for the terminal.",
   "license": "MIT",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@sbr0nch/contextia-extension",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Contextia MV3 browser extension. Consumes @sbr0nch/contextia-engine.",
   "license": "MIT",
