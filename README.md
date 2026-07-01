@@ -50,6 +50,20 @@ are underlined inline, with Redact / Allow once / Allow all / Allow pattern, and
 modes for Warn, Auto-redact, Block, or Off. Build it from `packages/extension`
 (`npm run build`) and load `dist/` unpacked, or install from the browser stores.
 
+## Claude Code plugin
+
+Block a prompt inside **Claude Code** when it contains a secret, natively — no
+proxy. Install the CLI, then add the plugin:
+
+```
+/plugin marketplace add sbr0nch/contextia
+/plugin install contextia@contextia
+```
+
+It runs on `UserPromptSubmit` and stops the prompt if a secret is detected.
+Hooks can't rewrite text, so this **blocks** — for redaction use the proxy
+(`contextia run -- claude`). See [`plugins/contextia`](plugins/contextia).
+
 ## What it detects
 
 40+ credential types — AWS, GitHub, GitLab, Stripe, Slack, OpenAI, Anthropic,

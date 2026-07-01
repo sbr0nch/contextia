@@ -1,0 +1,17 @@
+{
+  "name": "contextia",
+  "owner": {
+    "name": "sbr0nch"
+  },
+  "plugins": [
+    {
+      "name": "contextia",
+      "source": "./plugins/contextia",
+      "description": "Block prompts that contain API keys, tokens, or other secrets before they reach the model. On-device, uses the Contextia engine.",
+      "version": "0.1.0",
+      "author": {
+        "name": "sbr0nch"
+      }
+    }
+  ]
+}
