@@ -29,13 +29,46 @@ function isEditable(el: HTMLElement | null): el is HTMLElement {
   return el.isContentEditable
 }
 
+// The focused element may live inside one or more shadow roots; `activeElement`
+// only ever points one level deep, so walk down until we reach the real target.
+function deepActiveElement(): HTMLElement | null {
+  let el = document.activeElement as HTMLElement | null
+  while (el?.shadowRoot?.activeElement) {
+    el = el.shadowRoot.activeElement as HTMLElement
+  }
+  return el
+}
+
+// Some sites mount the composer inside a shadow root, where a top-level
+// querySelector can't see it. Do a bounded breadth-first walk through open
+// shadow roots and return the first visible match for any selector.
+function queryDeep(root: ParentNode, selectors: readonly string[]): HTMLElement | null {
+  const queue: ParentNode[] = [root]
+  let visited = 0
+  while (queue.length && visited < 2000) {
+    const node = queue.shift()!
+    for (const sel of selectors) {
+      const el = node.querySelector<HTMLElement>(sel)
+      if (el && isVisible(el)) return el
+    }
+    const hosts = node.querySelectorAll<HTMLElement>('*')
+    for (const host of hosts) {
+      visited++
+      if (host.shadowRoot) queue.push(host.shadowRoot)
+    }
+  }
+  return null
+}
+
 export function findComposer(root: ParentNode = document): Composer | null {
   for (const sel of SELECTORS) {
     const el = root.querySelector<HTMLElement>(sel)
     if (el && isVisible(el)) return makeComposer(el)
   }
-  const active = document.activeElement as HTMLElement | null
+  const active = deepActiveElement()
   if (isEditable(active) && isVisible(active)) return makeComposer(active)
+  const deep = queryDeep(root, SELECTORS)
+  if (deep) return makeComposer(deep)
   return null
 }
 
