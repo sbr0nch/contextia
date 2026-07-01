@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/contextia-logo.png" alt="Contextia" width="360">
+</p>
+
 # Contextia
 
 **Keep secrets out of AI.** Contextia catches API keys, tokens, private keys and
