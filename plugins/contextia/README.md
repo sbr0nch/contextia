@@ -15,6 +15,13 @@ Everything runs on-device; nothing is sent anywhere.
 That's it. Now, if you submit a prompt that contains a secret, Claude Code stops
 it and tells you what was found — remove it and send again.
 
+## Update / uninstall
+
+```
+/plugin marketplace update contextia   # pull the latest
+/plugin                                 # menu: enable, disable, or uninstall
+```
+
 ## Notes
 
 - It **blocks**; it does not rewrite. Claude Code hooks can't edit the prompt

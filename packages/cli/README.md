@@ -56,3 +56,10 @@ Live stats at `http://localhost:8787/__contextia`. Options: `--mode warn|redact|
 
 Everything runs locally; the only network call is forwarding the agent's own
 request to the LLM API it was already calling.
+
+## Update / uninstall
+
+```bash
+npm i -g @sbr0nch/contextia@latest   # update
+npm rm -g @sbr0nch/contextia         # uninstall
+```

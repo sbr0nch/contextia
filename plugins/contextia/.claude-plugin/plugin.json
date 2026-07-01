@@ -1,7 +1,7 @@
 {
   "name": "contextia",
   "description": "Blocks a prompt before it reaches the model when it contains a secret (API key, token, private key, connection string, ...). Runs on-device via the Contextia engine.",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": {
     "name": "sbr0nch"
   },

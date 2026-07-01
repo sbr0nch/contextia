@@ -1,8 +1,17 @@
 # Changelog
 
-## v0.1.0
+## v1.0.0
 
-First public release.
+First stable release. One on-device engine across four surfaces: the terminal
+CLI and AI-DLP proxy, a Claude Code plugin, the browser extension, and the engine
+library.
+
+Since the initial preview: added the `contextia run -- <agent>` wrapper (starts
+the proxy and launches the agent with no manual base-URL setup); a self-contained
+**Claude Code plugin** that blocks a prompt containing a secret before it reaches
+the model; reversible tokenization, per-finding rationale, and a custom
+always-redact list; credit-card (Luhn) and IBAN (mod-97) detectors; and the
+Contextia brand/logo across every surface.
 
 ### Detection engine (`packages/engine`)
 - 41 detectors (34 critical, 7 warning): cloud and service credentials (AWS
