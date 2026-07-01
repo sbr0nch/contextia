@@ -53,7 +53,7 @@ modes for Warn, Auto-redact, Block, or Off. Build it from `packages/extension`
 ## Claude Code plugin
 
 Block a prompt inside **Claude Code** when it contains a secret, natively — no
-proxy. Install the CLI, then add the plugin:
+proxy, nothing to install but the plugin itself (the engine is bundled):
 
 ```
 /plugin marketplace add sbr0nch/contextia
