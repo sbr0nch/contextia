@@ -234,6 +234,9 @@ async function handle(
   res.end()
 }
 
+// Brand loading/live mark: the two masked dots pulsing between brackets.
+const SPINNER = `<svg viewBox="0 0 120 120" width="22" height="22" style="vertical-align:-4px;margin-right:8px"><g fill="none" stroke="#00D084" stroke-width="11" stroke-linecap="round"><path d="M40 30 C24 30 24 42 24 60 C24 78 24 90 40 90"/><path d="M80 30 C96 30 96 42 96 60 C96 78 96 90 80 90"/></g><circle cx="50" cy="60" r="7" fill="#00D084"><animate attributeName="opacity" values="1;.2;1" dur="1.1s" repeatCount="indefinite"/></circle><circle cx="70" cy="60" r="7" fill="#00D084"><animate attributeName="opacity" values="1;.2;1" dur="1.1s" begin="0.55s" repeatCount="indefinite"/></circle></svg>`
+
 function dashboardHtml(stats: ProxyStats, mode: ProxyMode): string {
   const rows = Object.entries(stats.byType)
     .sort((a, b) => b[1] - a[1])
@@ -252,8 +255,8 @@ body{margin:0;background:#0a0a0a;color:#e8e8ea;font:14px/1.5 'Inter',system-ui,s
 table{border-collapse:collapse;width:100%;max-width:440px}td{padding:7px 10px;border-bottom:1px solid #21242c}
 td:last-child{text-align:right;color:#00D084;font-variant-numeric:tabular-nums}
 </style></head><body>
-<div class="brand">● Contextia proxy</div>
-<div class="sub">mode <b>${mode}</b> · up ~${mins} min</div>
+<div class="brand">${SPINNER}Contextia proxy</div>
+<div class="sub">mode <b>${mode}</b> · up ~${mins} min · live</div>
 <div class="cards">
 <div class="card"><div class="n">${stats.requests}</div><div class="l">requests</div></div>
 <div class="card"><div class="n r">${stats.withFindings}</div><div class="l">with secrets</div></div>

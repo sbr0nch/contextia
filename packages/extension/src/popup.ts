@@ -27,9 +27,14 @@ function timeAgo(ts: number): string {
   return `${Math.round(s / 86400)}d ago`
 }
 
+const SPINNER = `<svg viewBox="0 0 120 120" width="34" height="34"><g fill="none" stroke="#00D084" stroke-width="11" stroke-linecap="round"><path d="M40 30 C24 30 24 42 24 60 C24 78 24 90 40 90"/><path d="M80 30 C96 30 96 42 96 60 C96 78 96 90 80 90"/></g><circle cx="50" cy="60" r="7" fill="#00D084"><animate attributeName="opacity" values="1;.2;1" dur="1.1s" repeatCount="indefinite"/></circle><circle cx="70" cy="60" r="7" fill="#00D084"><animate attributeName="opacity" values="1;.2;1" dur="1.1s" begin="0.55s" repeatCount="indefinite"/></circle></svg>`
+
 async function render(): Promise<void> {
-  const [settings, stats, log] = await Promise.all([getSettings(), getStats(), getLog()])
   const app = document.getElementById('app')
+  if (app && !app.hasChildNodes()) {
+    app.innerHTML = `<div style="display:flex;justify-content:center;padding:44px 0">${SPINNER}</div>`
+  }
+  const [settings, stats, log] = await Promise.all([getSettings(), getStats(), getLog()])
   if (!app) return
   app.replaceChildren()
 

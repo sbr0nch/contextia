@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/sbr0nch/contextia/main/docs/brand/contextia-logo.png" alt="Contextia" width="320">
+</p>
+
 # @sbr0nch/contextia
 
 Keep secrets out of AI, from the terminal. Built on
@@ -13,9 +17,20 @@ npm install -g @sbr0nch/contextia
 contextia scan [files...]     # scan files or stdin; exits 1 if any secret is found
 contextia redact [files...]   # print the input with secrets replaced by tokens
 contextia proxy               # local AI-DLP proxy (see below)
+contextia run -- <cmd>        # launch an AI agent with the proxy already wired in
 contextia list                # list detectors
 contextia version
 contextia help
+```
+
+### Guard an agent in one step
+
+No manual base-URL setup — `run` starts the proxy, points the agent at it, and
+launches it:
+
+```bash
+contextia run -- claude
+contextia run --mode block -- cursor
 ```
 
 ### Scan (general secret scanning — git hooks, CI)
