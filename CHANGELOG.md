@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.1
+
+- Claude Code plugin: optional `CONTEXTIA_CONFIG` environment variable to point at
+  a JSON config (the engine's `Config` shape) that scopes detectors and adds
+  allowlists. Unset falls back to the defaults; it reads a local file only.
+
 ## v1.2.0
 
 - 11 more detectors (58 total): Figma, Airtable, Terraform Cloud, Dropbox, xAI
