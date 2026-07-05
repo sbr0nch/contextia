@@ -19,8 +19,13 @@
 - Wider `KEY=value` coverage: `ENCRYPTION_KEY`, `SIGNING_KEY`, `MASTER_KEY` and
   `SESSION_KEY` assignments are now caught, without flagging non-secret names like
   `ENCRYPTION_ALGORITHM` or `PRIMARY_KEY`.
-- New detector (59 total): Resend API keys (`re_…`), matched as a standalone
-  token, not only inside `RESEND_API_KEY=`.
+- 17 more detectors (74 total), a distinctive-prefix parity pass against the
+  gitleaks rule set: Resend, HashiCorp Vault, Dynatrace, Typeform, Prefect,
+  RubyGems, Clojars, Duffel, Frame.io, Shippo, EasyPost, Alibaba Cloud AccessKey,
+  age, ReadMe, Intra42, Facebook, and Sentry user tokens. Each carries a
+  distinctive literal prefix (so false positives stay near zero) and passes the
+  automatic FP gate. Resend also matches as a standalone token, not only inside
+  `RESEND_API_KEY=`.
 
 ## v1.2.1
 

@@ -214,5 +214,133 @@
     "pattern": "\\bre_(?=[A-Za-z0-9_]*\\d)[A-Za-z0-9_]{22,}\\b",
     "positives": ["re_{a:10}1{a:12}", "re_{b:12}2{b:12}"],
     "negatives": ["re_render_component_wrapper_factory", "re_short", "a resend email"]
+  },
+  {
+    "id": "hashicorp_vault_token",
+    "label": "HashiCorp Vault service token",
+    "severity": "critical",
+    "pattern": "\\bhvs\\.[A-Za-z0-9._-]{90,120}\\b",
+    "positives": ["hvs.{a:44}.{a:45}", "hvs.{b:54}.{b:55}"],
+    "negatives": ["hvs.short", "hvx.{a:90}", "a vault token"]
+  },
+  {
+    "id": "dynatrace_token",
+    "label": "Dynatrace API token",
+    "severity": "critical",
+    "pattern": "\\bdt0c01\\.[A-Za-z0-9_]{24}\\.[A-Za-z0-9_]{64}\\b",
+    "positives": ["dt0c01.{a:11}_{a:12}.{b:31}_{b:32}", "dt0c01.{c:11}_{c:12}.{d:31}_{d:32}"],
+    "negatives": ["dt0c01.{a:24}.short", "dt0c02.{a:11}_{a:12}.{b:31}_{b:32}", "a dynatrace token"]
+  },
+  {
+    "id": "typeform_token",
+    "label": "Typeform API token",
+    "severity": "critical",
+    "pattern": "\\btfp_[A-Za-z0-9._=-]{59}",
+    "positives": ["tfp_{A:59}", "tfp_{B:59}"],
+    "negatives": ["tfp_short", "tfx_{A:59}", "a typeform survey"]
+  },
+  {
+    "id": "prefect_token",
+    "label": "Prefect API token",
+    "severity": "critical",
+    "pattern": "\\bpnu_[A-Za-z0-9_]{36}\\b",
+    "positives": ["pnu_{a:17}_{a:18}", "pnu_{b:17}_{b:18}"],
+    "negatives": ["pnu_short", "pnx_{a:36}", "a prefect flow"]
+  },
+  {
+    "id": "rubygems_token",
+    "label": "RubyGems API token",
+    "severity": "critical",
+    "pattern": "\\brubygems_[a-f0-9_]{48}\\b",
+    "positives": ["rubygems_{a:23}_{a:24}", "rubygems_{b:23}_{b:24}"],
+    "negatives": ["rubygems_short", "rubygemx_{a:48}", "a ruby gem"]
+  },
+  {
+    "id": "clojars_token",
+    "label": "Clojars API token",
+    "severity": "critical",
+    "pattern": "\\bCLOJARS_[A-Za-z0-9_]{60}\\b",
+    "positives": ["CLOJARS_{a:29}_{a:30}", "CLOJARS_{b:29}_{b:30}"],
+    "negatives": ["CLOJARS_short", "CLOJARX_{a:60}", "a clojure lib"]
+  },
+  {
+    "id": "duffel_token",
+    "label": "Duffel API token",
+    "severity": "critical",
+    "pattern": "\\bduffel_(?:test|live)_[A-Za-z0-9._=-]{43}",
+    "positives": ["duffel_test_{a:21}.{a:21}", "duffel_live_{b:21}.{b:21}"],
+    "negatives": ["duffel_test_short", "duffel_prod_{a:43}", "a duffel booking"]
+  },
+  {
+    "id": "frameio_token",
+    "label": "Frame.io API token",
+    "severity": "critical",
+    "pattern": "\\bfio-u-[A-Za-z0-9._=-]{64}",
+    "positives": ["fio-u-{a:31}.{a:32}", "fio-u-{b:31}.{b:32}"],
+    "negatives": ["fio-u-short", "fio-x-{a:64}", "a frame io asset"]
+  },
+  {
+    "id": "shippo_token",
+    "label": "Shippo API token",
+    "severity": "critical",
+    "pattern": "\\bshippo_(?:live|test)_[a-fA-F0-9_]{40}\\b",
+    "positives": ["shippo_live_{a:19}_{a:20}", "shippo_test_{b:19}_{b:20}"],
+    "negatives": ["shippo_live_short", "shippo_prod_{a:40}", "a shippo label"]
+  },
+  {
+    "id": "easypost_token",
+    "label": "EasyPost API token",
+    "severity": "critical",
+    "pattern": "\\bEZAK[A-Za-z0-9_]{54}\\b",
+    "positives": ["EZAK{a:26}_{a:27}", "EZAK{b:26}_{b:27}"],
+    "negatives": ["EZAKshort", "EZAX{a:54}", "an easypost shipment"]
+  },
+  {
+    "id": "alibaba_access_key",
+    "label": "Alibaba Cloud AccessKey ID",
+    "severity": "critical",
+    "pattern": "\\bLTAI[A-Za-z0-9_]{20}\\b",
+    "positives": ["LTAI{a:9}_{a:10}", "LTAI{b:9}_{b:10}"],
+    "negatives": ["LTAIshort", "LTAX{a:20}", "an alibaba account"]
+  },
+  {
+    "id": "age_secret_key",
+    "label": "age secret key",
+    "severity": "critical",
+    "pattern": "\\bAGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L_]{58}\\b",
+    "positives": ["AGE-SECRET-KEY-1{Q:28}_{Q:29}", "AGE-SECRET-KEY-1{A:28}_{A:29}"],
+    "negatives": ["AGE-SECRET-KEY-1{Q:57}", "AGE-PUBLIC-KEY-1{Q:58}", "an age identity"]
+  },
+  {
+    "id": "readme_token",
+    "label": "ReadMe API token",
+    "severity": "critical",
+    "pattern": "\\brdme_[a-z0-9_]{70}\\b",
+    "positives": ["rdme_{a:34}_{a:35}", "rdme_{b:34}_{b:35}"],
+    "negatives": ["rdme_short", "rdmx_{a:70}", "a readme file"]
+  },
+  {
+    "id": "intra42_secret",
+    "label": "Intra42 client secret",
+    "severity": "critical",
+    "pattern": "\\bs-s4t2(?:ud|af)-[a-f0-9_]{64}\\b",
+    "positives": ["s-s4t2ud-{a:31}_{a:32}", "s-s4t2af-{b:31}_{b:32}"],
+    "negatives": ["s-s4t2ud-short", "s-s4t2xx-{a:64}", "an intra42 app"]
+  },
+  {
+    "id": "facebook_token",
+    "label": "Facebook access token",
+    "severity": "critical",
+    "pattern": "\\bEAA[MC][A-Za-z0-9_]{100,}\\b",
+    "positives": ["EAAM{a:50}_{a:50}", "EAAC{b:55}_{b:55}"],
+    "negatives": ["EAAM{a:99}", "EAAX{a:100}", "a facebook post"]
+  },
+  {
+    "id": "sentry_user_token",
+    "label": "Sentry user token",
+    "severity": "critical",
+    "pattern": "\\bsntryu_[a-f0-9_]{64}\\b",
+    "positives": ["sntryu_{a:31}_{a:32}", "sntryu_{b:31}_{b:32}"],
+    "negatives": ["sntryu_short", "sntryx_{a:64}", "a sentry issue"]
   }
 ]

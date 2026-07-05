@@ -30,6 +30,22 @@ const RE_23 = new RegExp("\\bfw_[0-9A-Za-z]{24,}\\b", "g")
 const RE_24 = new RegExp("\\bATATT3x[A-Za-z0-9_=+/.-]{150,}\\b", "g")
 const RE_25 = new RegExp("\\btskey-(?:auth|api|client)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{20,}\\b", "g")
 const RE_26 = new RegExp("\\bre_(?=[A-Za-z0-9_]*\\d)[A-Za-z0-9_]{22,}\\b", "g")
+const RE_27 = new RegExp("\\bhvs\\.[A-Za-z0-9._-]{90,120}\\b", "g")
+const RE_28 = new RegExp("\\bdt0c01\\.[A-Za-z0-9_]{24}\\.[A-Za-z0-9_]{64}\\b", "g")
+const RE_29 = new RegExp("\\btfp_[A-Za-z0-9._=-]{59}", "g")
+const RE_30 = new RegExp("\\bpnu_[A-Za-z0-9_]{36}\\b", "g")
+const RE_31 = new RegExp("\\brubygems_[a-f0-9_]{48}\\b", "g")
+const RE_32 = new RegExp("\\bCLOJARS_[A-Za-z0-9_]{60}\\b", "g")
+const RE_33 = new RegExp("\\bduffel_(?:test|live)_[A-Za-z0-9._=-]{43}", "g")
+const RE_34 = new RegExp("\\bfio-u-[A-Za-z0-9._=-]{64}", "g")
+const RE_35 = new RegExp("\\bshippo_(?:live|test)_[a-fA-F0-9_]{40}\\b", "g")
+const RE_36 = new RegExp("\\bEZAK[A-Za-z0-9_]{54}\\b", "g")
+const RE_37 = new RegExp("\\bLTAI[A-Za-z0-9_]{20}\\b", "g")
+const RE_38 = new RegExp("\\bAGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L_]{58}\\b", "g")
+const RE_39 = new RegExp("\\brdme_[a-z0-9_]{70}\\b", "g")
+const RE_40 = new RegExp("\\bs-s4t2(?:ud|af)-[a-f0-9_]{64}\\b", "g")
+const RE_41 = new RegExp("\\bEAA[MC][A-Za-z0-9_]{100,}\\b", "g")
+const RE_42 = new RegExp("\\bsntryu_[a-f0-9_]{64}\\b", "g")
 
 export const generated: Detector[] = [
   {
@@ -247,5 +263,133 @@ export const generated: Detector[] = [
     defaultEnabled: true,
     scan: (text) => matchAll(RE_26, text),
     fixtures: { positives: ["re_aaaaaaaaaa1aaaaaaaaaaaa","re_bbbbbbbbbbbb2bbbbbbbbbbbb"], negatives: ["re_render_component_wrapper_factory","re_short","a resend email"] },
+  },
+  {
+    id: "hashicorp_vault_token",
+    label: "HashiCorp Vault service token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_27, text),
+    fixtures: { positives: ["hvs.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","hvs.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["hvs.short","hvx.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a vault token"] },
+  },
+  {
+    id: "dynatrace_token",
+    label: "Dynatrace API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_28, text),
+    fixtures: { positives: ["dt0c01.aaaaaaaaaaa_aaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","dt0c01.ccccccccccc_cccccccccccc.ddddddddddddddddddddddddddddddd_dddddddddddddddddddddddddddddddd"], negatives: ["dt0c01.aaaaaaaaaaaaaaaaaaaaaaaa.short","dt0c02.aaaaaaaaaaa_aaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","a dynatrace token"] },
+  },
+  {
+    id: "typeform_token",
+    label: "Typeform API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_29, text),
+    fixtures: { positives: ["tfp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","tfp_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"], negatives: ["tfp_short","tfx_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","a typeform survey"] },
+  },
+  {
+    id: "prefect_token",
+    label: "Prefect API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_30, text),
+    fixtures: { positives: ["pnu_aaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaa","pnu_bbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbb"], negatives: ["pnu_short","pnx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a prefect flow"] },
+  },
+  {
+    id: "rubygems_token",
+    label: "RubyGems API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_31, text),
+    fixtures: { positives: ["rubygems_aaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaa","rubygems_bbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["rubygems_short","rubygemx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a ruby gem"] },
+  },
+  {
+    id: "clojars_token",
+    label: "Clojars API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_32, text),
+    fixtures: { positives: ["CLOJARS_aaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","CLOJARS_bbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["CLOJARS_short","CLOJARX_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a clojure lib"] },
+  },
+  {
+    id: "duffel_token",
+    label: "Duffel API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_33, text),
+    fixtures: { positives: ["duffel_test_aaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaa","duffel_live_bbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbb"], negatives: ["duffel_test_short","duffel_prod_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a duffel booking"] },
+  },
+  {
+    id: "frameio_token",
+    label: "Frame.io API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_34, text),
+    fixtures: { positives: ["fio-u-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","fio-u-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["fio-u-short","fio-x-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a frame io asset"] },
+  },
+  {
+    id: "shippo_token",
+    label: "Shippo API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_35, text),
+    fixtures: { positives: ["shippo_live_aaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaa","shippo_test_bbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbb"], negatives: ["shippo_live_short","shippo_prod_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a shippo label"] },
+  },
+  {
+    id: "easypost_token",
+    label: "EasyPost API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_36, text),
+    fixtures: { positives: ["EZAKaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaa","EZAKbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["EZAKshort","EZAXaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","an easypost shipment"] },
+  },
+  {
+    id: "alibaba_access_key",
+    label: "Alibaba Cloud AccessKey ID",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_37, text),
+    fixtures: { positives: ["LTAIaaaaaaaaa_aaaaaaaaaa","LTAIbbbbbbbbb_bbbbbbbbbb"], negatives: ["LTAIshort","LTAXaaaaaaaaaaaaaaaaaaaa","an alibaba account"] },
+  },
+  {
+    id: "age_secret_key",
+    label: "age secret key",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_38, text),
+    fixtures: { positives: ["AGE-SECRET-KEY-1QQQQQQQQQQQQQQQQQQQQQQQQQQQQ_QQQQQQQQQQQQQQQQQQQQQQQQQQQQQ","AGE-SECRET-KEY-1AAAAAAAAAAAAAAAAAAAAAAAAAAAA_AAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["AGE-SECRET-KEY-1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ","AGE-PUBLIC-KEY-1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ","an age identity"] },
+  },
+  {
+    id: "readme_token",
+    label: "ReadMe API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_39, text),
+    fixtures: { positives: ["rdme_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","rdme_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["rdme_short","rdmx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a readme file"] },
+  },
+  {
+    id: "intra42_secret",
+    label: "Intra42 client secret",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_40, text),
+    fixtures: { positives: ["s-s4t2ud-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","s-s4t2af-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["s-s4t2ud-short","s-s4t2xx-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","an intra42 app"] },
+  },
+  {
+    id: "facebook_token",
+    label: "Facebook access token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_41, text),
+    fixtures: { positives: ["EAAMaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","EAACbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["EAAMaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","EAAXaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a facebook post"] },
+  },
+  {
+    id: "sentry_user_token",
+    label: "Sentry user token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_42, text),
+    fixtures: { positives: ["sntryu_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sntryu_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["sntryu_short","sntryx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a sentry issue"] },
   },
 ]
