@@ -206,5 +206,13 @@
     "pattern": "\\btskey-(?:auth|api|client)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{20,}\\b",
     "positives": ["tskey-auth-{a:12}-{b:40}", "tskey-api-{A:16}-{0:30}"],
     "negatives": ["tskey-auth-short", "tskey-xxxx-{a:12}-{b:40}", "a tailscale node"]
+  },
+  {
+    "id": "resend_key",
+    "label": "Resend API key",
+    "severity": "critical",
+    "pattern": "\\bre_(?=[A-Za-z0-9_]*\\d)[A-Za-z0-9_]{22,}\\b",
+    "positives": ["re_{a:10}1{a:12}", "re_{b:12}2{b:12}"],
+    "negatives": ["re_render_component_wrapper_factory", "re_short", "a resend email"]
   }
 ]

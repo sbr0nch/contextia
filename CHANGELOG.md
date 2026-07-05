@@ -19,6 +19,8 @@
 - Wider `KEY=value` coverage: `ENCRYPTION_KEY`, `SIGNING_KEY`, `MASTER_KEY` and
   `SESSION_KEY` assignments are now caught, without flagging non-secret names like
   `ENCRYPTION_ALGORITHM` or `PRIMARY_KEY`.
+- New detector (59 total): Resend API keys (`re_…`), matched as a standalone
+  token, not only inside `RESEND_API_KEY=`.
 
 ## v1.2.1
 

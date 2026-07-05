@@ -762,6 +762,7 @@ var RE_22 = new RegExp("\\brzp_(?:live|test)_[0-9A-Za-z]{14,}\\b", "g");
 var RE_23 = new RegExp("\\bfw_[0-9A-Za-z]{24,}\\b", "g");
 var RE_24 = new RegExp("\\bATATT3x[A-Za-z0-9_=+/.-]{150,}\\b", "g");
 var RE_25 = new RegExp("\\btskey-(?:auth|api|client)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{20,}\\b", "g");
+var RE_26 = new RegExp("\\bre_(?=[A-Za-z0-9_]*\\d)[A-Za-z0-9_]{22,}\\b", "g");
 var generated = [
   {
     id: "mailchimp_key",
@@ -970,6 +971,14 @@ var generated = [
     defaultEnabled: true,
     scan: (text) => matchAll(RE_25, text),
     fixtures: { positives: ["tskey-auth-aaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "tskey-api-AAAAAAAAAAAAAAAA-000000000000000000000000000000"], negatives: ["tskey-auth-short", "tskey-xxxx-aaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "a tailscale node"] }
+  },
+  {
+    id: "resend_key",
+    label: "Resend API key",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_26, text),
+    fixtures: { positives: ["re_aaaaaaaaaa1aaaaaaaaaaaa", "re_bbbbbbbbbbbb2bbbbbbbbbbbb"], negatives: ["re_render_component_wrapper_factory", "re_short", "a resend email"] }
   }
 ];
 
