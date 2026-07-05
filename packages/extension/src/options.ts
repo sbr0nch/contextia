@@ -9,7 +9,7 @@ import {
   type Settings,
 } from './storage.js'
 import { MARK_SVG } from './brand.js'
-import { isLoopbackUrl } from './reporter.js'
+import { isLoopbackUrl, DEFAULT_STATS_URL } from './reporter.js'
 import { api } from './api.js'
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
@@ -209,35 +209,22 @@ function renderAllowlists(app: HTMLElement): void {
 }
 
 function renderIntegration(app: HTMLElement): void {
-  const c = card('Local stats endpoint', 'optional')
-  const field = el('div', 'cx-field')
-  field.append(el('label', '', 'Mirror catch counts to a local dashboard (loopback only)'))
-  const input = document.createElement('input')
-  input.type = 'text'
-  input.placeholder = 'http://127.0.0.1:8787/__contextia/events'
-  input.value = settings.localStatsUrl
-  field.append(input)
-  const hint = el(
-    'div',
-    'cx-line-s',
-    'Off by default. Only http://127.0.0.1 or localhost is accepted — counts only, never the secret value. Empty = disabled.',
+  const c = card('Local dashboard', 'optional')
+
+  const row = el('div', 'cx-line')
+  const txt = el('div')
+  txt.append(
+    el('div', 'cx-line-t', 'Mirror catches to the local proxy dashboard'),
+    el('div', 'cx-line-s', 'Sends counts only (never the secret) to http://127.0.0.1:8787 by default. Off unless you turn it on.'),
   )
-  const status = el('span', 'cx-saved')
-  const show = (text: string) => {
-    status.textContent = text
-    status.classList.add('cx-saved-on')
-    setTimeout(() => status.classList.remove('cx-saved-on'), 1600)
-  }
-  const save = el('button', 'cx-primary', 'Save endpoint') as HTMLButtonElement
-  save.addEventListener('click', async () => {
-    const url = input.value.trim()
-    if (url === '') {
-      await persist({ localStatsUrl: '' })
-      show('Disabled')
+  const t = toggle(settings.localStatsEnabled, async (on) => {
+    if (!on) {
+      await persist({ localStatsEnabled: false })
       return
     }
+    const url = settings.localStatsUrl.trim() || DEFAULT_STATS_URL
     if (!isLoopbackUrl(url)) {
-      show('Not a loopback URL')
+      void render() // revert the toggle
       return
     }
     const origin = new URL(url).hostname === 'localhost' ? 'http://localhost/*' : 'http://127.0.0.1/*'
@@ -245,18 +232,40 @@ function renderIntegration(app: HTMLElement): void {
     try {
       granted = await api.permissions.request({ origins: [origin] })
     } catch {
-      granted = true // browsers without the prompt (e.g. policy-granted) still work
+      granted = true // policy-granted browsers have no prompt
     }
-    if (!granted) {
-      show('Permission denied')
+    await persist({ localStatsEnabled: granted })
+    if (!granted) void render()
+  })
+  row.append(txt, t)
+  c.append(row)
+
+  // Advanced: point at a non-default loopback port. Empty = the default above.
+  const field = el('div', 'cx-field')
+  field.append(el('label', '', 'Custom endpoint (optional, loopback only)'))
+  const input = document.createElement('input')
+  input.type = 'text'
+  input.placeholder = DEFAULT_STATS_URL
+  input.value = settings.localStatsUrl
+  field.append(input)
+  const status = el('span', 'cx-saved')
+  const save = el('button', '', 'Save endpoint') as HTMLButtonElement
+  save.addEventListener('click', async () => {
+    const url = input.value.trim()
+    if (url !== '' && !isLoopbackUrl(url)) {
+      status.textContent = 'Not a loopback URL'
+      status.classList.add('cx-saved-on')
+      setTimeout(() => status.classList.remove('cx-saved-on'), 1600)
       return
     }
     await persist({ localStatsUrl: url })
-    show('Saved')
+    status.textContent = 'Saved'
+    status.classList.add('cx-saved-on')
+    setTimeout(() => status.classList.remove('cx-saved-on'), 1600)
   })
   const actions = el('div', 'cx-actions')
   actions.append(save, status)
-  c.append(field, hint, actions)
+  c.append(field, actions)
   app.append(c)
 }
 

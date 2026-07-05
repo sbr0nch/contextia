@@ -12,6 +12,9 @@ export interface CxEvent {
   count: number
 }
 
+/** The CLI proxy's default local dashboard endpoint — used when none is given. */
+export const DEFAULT_STATS_URL = 'http://127.0.0.1:8787/__contextia/events'
+
 /** True only for http:// on 127.0.0.1 / localhost / ::1 — never anything remote. */
 export function isLoopbackUrl(url: string): boolean {
   let u: URL

@@ -1,6 +1,6 @@
 import { api } from './api.js'
 import { getSettings } from './storage.js'
-import { isLoopbackUrl, postEvents, type CxEvent } from './reporter.js'
+import { isLoopbackUrl, postEvents, DEFAULT_STATS_URL, type CxEvent } from './reporter.js'
 
 // Service worker. Beyond existing, it batches secret-free catch events from the
 // content scripts and forwards them to an optional LOCAL stats endpoint. If no
@@ -18,7 +18,9 @@ async function endpoint(): Promise<string | null> {
     // no managed storage on this browser/profile — fall through
   }
   const s = await getSettings()
-  return s.localStatsUrl && isLoopbackUrl(s.localStatsUrl) ? s.localStatsUrl : null
+  if (!s.localStatsEnabled) return null // off by default → nothing is sent
+  const url = s.localStatsUrl.trim() || DEFAULT_STATS_URL
+  return isLoopbackUrl(url) ? url : null
 }
 
 let buffer: CxEvent[] = []

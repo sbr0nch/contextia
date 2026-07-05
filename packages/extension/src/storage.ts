@@ -18,10 +18,11 @@ export interface Settings {
   redactlist: Allowlist
   /** Append a one-line note that Contextia redacted the text. Off by default. */
   signature: boolean
+  /** Mirror catch counts to the local dashboard. Off by default → zero-network. */
+  localStatsEnabled: boolean
   /**
-   * Optional loopback URL to mirror catch counts to a local dashboard. Empty =
-   * off (the default), keeping the extension zero-network. Only loopback URLs
-   * are ever used; anything else is ignored.
+   * Optional loopback URL override. Empty = use the proxy's default endpoint.
+   * Only loopback URLs are ever used; anything else is ignored.
    */
   localStatsUrl: string
 }
@@ -51,6 +52,7 @@ export const DEFAULT_SETTINGS: Settings = {
   allowlist: { values: [], patterns: [] },
   redactlist: { values: [], patterns: [] },
   signature: false,
+  localStatsEnabled: false,
   localStatsUrl: '',
 }
 
