@@ -16,6 +16,9 @@
   dashboard matches the popup's caught-vs-leaked distinction.
 - The extension is **zero network by default**; the only network path is the
   opt-in, loopback-guarded reporter, covered by tests.
+- Wider `KEY=value` coverage: `ENCRYPTION_KEY`, `SIGNING_KEY`, `MASTER_KEY` and
+  `SESSION_KEY` assignments are now caught, without flagging non-secret names like
+  `ENCRYPTION_ALGORITHM` or `PRIMARY_KEY`.
 
 ## v1.2.1
 

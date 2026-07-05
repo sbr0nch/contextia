@@ -3,7 +3,7 @@ import type { Detector, RawMatch } from '../types.js'
 // `KEY=value` lines where the key name implies a secret and the value is
 // substantive. Scoping to secret-ish key names keeps false positives down.
 const RE =
-  /(?:^|\n)[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]*[ \t]*=[ \t]*['"]?([^\s'"#]{8,})['"]?/gi
+  /(?:^|\n)[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]*[ \t]*=[ \t]*['"]?([^\s'"#]{8,})['"]?/gi
 
 const PLACEHOLDER = /^\$[{(]|^<|^your_|^changeme$|^x{3,}$|^\.{3,}$/i
 
@@ -27,11 +27,14 @@ export const envSecret: Detector = {
       'API_KEY=sk_abcd1234efgh',
       'export DB_PASSWORD="s3cr3tValue1"',
       'AUTH_TOKEN=abcd1234efgh5678',
+      'ENCRYPTION_KEY=QEDirqDwyxx1T7jt3nDmSvDLNdLao=',
+      'SIGNING_KEY=abcd1234efgh5678',
     ],
     negatives: [
       'DEBUG=true',
       'PORT=8080',
       'PASSWORD=${DB_PASSWORD}', // placeholder, not a real secret
+      'ENCRYPTION_ALGORITHM=aes-256-gcm', // an algorithm name, not a secret
     ],
   },
 }
