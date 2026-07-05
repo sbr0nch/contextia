@@ -8,7 +8,7 @@ export interface CxEvent {
   ts: string
   site: string
   detector: string
-  action: 'warn' | 'redact' | 'block'
+  action: 'warn' | 'redact' | 'block' | 'leaked'
   count: number
 }
 

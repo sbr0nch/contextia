@@ -159,19 +159,35 @@ function doRedact(action: LogAction): void {
 }
 
 function onKeydown(e: KeyboardEvent): void {
-  if (settings.mode !== 'block' || findings.length === 0) return
-  if (e.key === 'Enter' && !e.shiftKey) blockSubmit(e)
+  if (findings.length === 0) return
+  if (e.key !== 'Enter' || e.shiftKey) return
+  if (settings.mode === 'block') blockSubmit(e)
+  else if (settings.mode === 'warn') markLeaked()
 }
 
-// Block mode must also stop a click on the send button, not just the Enter key.
+// Block mode stops a click on the send button; warn mode lets it through but
+// records that the flagged secret was sent anyway.
 function onSendClick(e: MouseEvent): void {
-  if (settings.mode !== 'block' || findings.length === 0) return
-  if (isSendTarget(e.target)) blockSubmit(e)
+  if (findings.length === 0 || !isSendTarget(e.target)) return
+  if (settings.mode === 'block') blockSubmit(e)
+  else if (settings.mode === 'warn') markLeaked()
 }
 
 function onSubmit(e: Event): void {
-  if (settings.mode !== 'block' || findings.length === 0) return
-  blockSubmit(e)
+  if (findings.length === 0) return
+  if (settings.mode === 'block') blockSubmit(e)
+  else if (settings.mode === 'warn') markLeaked()
+}
+
+// Warn mode: the user submitted despite an active warning. Count it as leaked
+// (once per unique secret) and mirror it to the local dashboard — counts only.
+const leaked = new Set<string>()
+function markLeaked(): void {
+  const fresh = findings.filter((f) => !leaked.has(f.type + '|' + f.match))
+  for (const f of fresh) leaked.add(f.type + '|' + f.match)
+  if (fresh.length === 0) return
+  void bumpStats({ leaked: fresh.length })
+  for (const f of fresh) report(f, 'leaked')
 }
 
 // Send-button detection (resilient scoring) lives in ./send-button so it can be
@@ -233,7 +249,7 @@ function entry(f: Finding, action: LogAction): LogEntry {
 // Mirror a catch to the background reporter as a secret-free count. The reporter
 // only forwards it if the user configured a local endpoint; otherwise it's a
 // no-op. The matched value is never included.
-function report(f: Finding, action: 'warn' | 'redact' | 'block'): void {
+function report(f: Finding, action: 'warn' | 'redact' | 'block' | 'leaked'): void {
   try {
     const p = api.runtime.sendMessage({
       type: 'cx-event',

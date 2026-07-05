@@ -8,8 +8,12 @@
   Off by default; the extension refuses any non-loopback URL, and can be
   preconfigured by enterprise policy via `chrome.storage.managed`.
 - Proxy: accepts `POST /__contextia/events` (loopback only) and folds the counts
-  into the existing stats and dashboard, including a new by-site breakdown. The
-  endpoint rejects any body carrying a field outside the counts whitelist.
+  into the existing stats and dashboard, including a new by-site breakdown and a
+  `leaked` counter (submitted despite a warning). The endpoint rejects any body
+  carrying a field outside the counts whitelist.
+- Extension: submitting in Warn mode despite an active warning now counts as
+  `leaked` in the popup and emits a matching `leaked` event, so the local
+  dashboard matches the popup's caught-vs-leaked distinction.
 - The extension is **zero network by default**; the only network path is the
   opt-in, loopback-guarded reporter, covered by tests.
 

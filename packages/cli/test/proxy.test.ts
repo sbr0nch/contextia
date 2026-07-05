@@ -77,7 +77,7 @@ describe('textNodes / processPayload', () => {
 
 describe('browser events (/__contextia/events)', () => {
   const emptyStats = (): ProxyStats => ({
-    startedAt: 0, requests: 0, withFindings: 0, redacted: 0, blocked: 0, byType: {}, bySite: {},
+    startedAt: 0, requests: 0, withFindings: 0, redacted: 0, blocked: 0, leaked: 0, byType: {}, bySite: {},
   })
 
   it('accepts a counts-only batch and rejects anything with extra fields', () => {
@@ -103,6 +103,16 @@ describe('browser events (/__contextia/events)', () => {
     expect(stats.redacted).toBe(1)
     expect(stats.withFindings).toBe(3)
     expect(stats.requests).toBe(0) // request count is left untouched
+  })
+
+  it('folds a leaked event into byType and the leaked counter', () => {
+    expect(parseEventBatch({ events: [{ ts: 't', site: 's', detector: 'd', action: 'leaked', count: 1 }] })).toHaveLength(1)
+    const stats = emptyStats()
+    foldEvents(stats, [{ ts: 't', site: 'chatgpt.com', detector: 'openai_key', action: 'leaked', count: 3 }])
+    expect(stats.leaked).toBe(3)
+    expect(stats.byType).toEqual({ openai_key: 3 })
+    expect(stats.blocked).toBe(0)
+    expect(stats.redacted).toBe(0)
   })
 })
 

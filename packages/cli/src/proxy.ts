@@ -26,6 +26,7 @@ export interface ProxyStats {
   withFindings: number
   redacted: number
   blocked: number
+  leaked: number
   byType: Record<string, number>
   bySite: Record<string, number>
 }
@@ -35,12 +36,12 @@ export interface BrowserEvent {
   ts: string
   site: string
   detector: string
-  action: 'warn' | 'redact' | 'block'
+  action: 'warn' | 'redact' | 'block' | 'leaked'
   count: number
 }
 
 const EVENT_FIELDS = new Set(['ts', 'site', 'detector', 'action', 'count'])
-const EVENT_ACTIONS = new Set(['warn', 'redact', 'block'])
+const EVENT_ACTIONS = new Set(['warn', 'redact', 'block', 'leaked'])
 
 /**
  * Parse a browser event batch. Returns null if the body carries any field we
@@ -73,6 +74,7 @@ export function foldEvents(stats: ProxyStats, events: BrowserEvent[]): void {
     stats.bySite[e.site] = (stats.bySite[e.site] ?? 0) + e.count
     if (e.action === 'redact') stats.redacted += e.count
     else if (e.action === 'block') stats.blocked += e.count
+    else if (e.action === 'leaked') stats.leaked += e.count
   }
 }
 
@@ -187,6 +189,7 @@ export function createProxyServer(opts: ProxyOptions): Server {
     withFindings: 0,
     redacted: 0,
     blocked: 0,
+    leaked: 0,
     byType: {},
     bySite: {},
   }
@@ -356,6 +359,7 @@ td:last-child{text-align:right;color:#00D084;font-variant-numeric:tabular-nums}
 <div class="card"><div class="n r">${stats.withFindings}</div><div class="l">with secrets</div></div>
 <div class="card"><div class="n g">${stats.redacted}</div><div class="l">redacted</div></div>
 <div class="card"><div class="n r">${stats.blocked}</div><div class="l">blocked</div></div>
+<div class="card"><div class="n r">${stats.leaked}</div><div class="l">leaked</div></div>
 </div>
 <table>${rows || '<tr><td class="l">no secrets seen yet</td><td></td></tr>'}</table>
 ${siteRows ? `<div class="sub" style="margin:22px 0 8px">by site (browser)</div><table>${siteRows}</table>` : ''}
