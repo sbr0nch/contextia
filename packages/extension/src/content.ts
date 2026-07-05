@@ -134,6 +134,7 @@ function doRedactOne(f: Finding): void {
   composer.setText(redact(composer.getText(), [f]))
   void bumpStats({ redacted: 1 })
   void appendLog([entry(f, 'redacted')])
+  report(f, 'redact')
   setTimeout(scan, 0)
 }
 
@@ -153,6 +154,7 @@ function doRedact(action: LogAction): void {
   composer.setText(redacted)
   void bumpStats({ redacted: findings.length })
   void appendLog(findings.map((f) => entry(f, action)))
+  for (const f of findings) report(f, 'redact')
   setTimeout(scan, 0)
 }
 
@@ -192,6 +194,7 @@ function blockSubmit(e: Event): void {
   e.preventDefault()
   e.stopImmediatePropagation()
   void appendLog(findings.map((f) => entry(f, 'blocked')))
+  for (const f of findings) report(f, 'block')
   hud.setState(findings, composer, settings.mode)
   hud.flashBlocked(findings.length)
 }
@@ -219,11 +222,27 @@ function logNew(fs: Finding[]): void {
   if (fresh.length) {
     void bumpStats({ caught: fresh.length })
     void appendLog(fresh.map((f) => entry(f, 'flagged')))
+    for (const f of fresh) report(f, 'warn')
   }
 }
 
 function entry(f: Finding, action: LogAction): LogEntry {
   return logEntryFor(f, SITE, action, Date.now())
+}
+
+// Mirror a catch to the background reporter as a secret-free count. The reporter
+// only forwards it if the user configured a local endpoint; otherwise it's a
+// no-op. The matched value is never included.
+function report(f: Finding, action: 'warn' | 'redact' | 'block'): void {
+  try {
+    const p = api.runtime.sendMessage({
+      type: 'cx-event',
+      event: { ts: new Date().toISOString(), site: SITE, detector: f.type, action, count: 1 },
+    }) as unknown as Promise<unknown> | undefined
+    if (p && typeof p.then === 'function') p.catch(() => {})
+  } catch {
+    // background may be unavailable — reporting is best-effort, never blocking
+  }
 }
 
 function debounce<T extends (...a: never[]) => void>(fn: T, ms: number): T {

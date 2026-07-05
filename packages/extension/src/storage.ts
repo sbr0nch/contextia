@@ -18,6 +18,12 @@ export interface Settings {
   redactlist: Allowlist
   /** Append a one-line note that Contextia redacted the text. Off by default. */
   signature: boolean
+  /**
+   * Optional loopback URL to mirror catch counts to a local dashboard. Empty =
+   * off (the default), keeping the extension zero-network. Only loopback URLs
+   * are ever used; anything else is ignored.
+   */
+  localStatsUrl: string
 }
 
 export type LogAction = 'flagged' | 'redacted' | 'allowed' | 'blocked'
@@ -45,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {
   allowlist: { values: [], patterns: [] },
   redactlist: { values: [], patterns: [] },
   signature: false,
+  localStatsUrl: '',
 }
 
 const SETTINGS_KEY = 'settings'

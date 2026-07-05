@@ -27,6 +27,57 @@ export interface ProxyStats {
   redacted: number
   blocked: number
   byType: Record<string, number>
+  bySite: Record<string, number>
+}
+
+/** A secret-free browser catch, reported to the local dashboard. Counts only. */
+export interface BrowserEvent {
+  ts: string
+  site: string
+  detector: string
+  action: 'warn' | 'redact' | 'block'
+  count: number
+}
+
+const EVENT_FIELDS = new Set(['ts', 'site', 'detector', 'action', 'count'])
+const EVENT_ACTIONS = new Set(['warn', 'redact', 'block'])
+
+/**
+ * Parse a browser event batch. Returns null if the body carries any field we
+ * don't expect — so by construction a matched secret value can never arrive
+ * here, even if a caller tried to attach one.
+ */
+export function parseEventBatch(body: unknown): BrowserEvent[] | null {
+  if (!body || typeof body !== 'object') return null
+  const events = (body as Record<string, unknown>)['events']
+  if (!Array.isArray(events) || events.length === 0 || events.length > 1000) return null
+  const out: BrowserEvent[] = []
+  for (const e of events) {
+    if (!e || typeof e !== 'object') return null
+    const rec = e as Record<string, unknown>
+    for (const k of Object.keys(rec)) if (!EVENT_FIELDS.has(k)) return null
+    const { ts, site, detector, action, count } = rec
+    if (typeof ts !== 'string' || typeof site !== 'string' || typeof detector !== 'string') return null
+    if (typeof action !== 'string' || !EVENT_ACTIONS.has(action)) return null
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > 100000) return null
+    out.push({ ts, site, detector, action: action as BrowserEvent['action'], count })
+  }
+  return out
+}
+
+/** Fold a browser event batch into the running stats (mirrors terminal catches). */
+export function foldEvents(stats: ProxyStats, events: BrowserEvent[]): void {
+  for (const e of events) {
+    stats.withFindings += e.count
+    stats.byType[e.detector] = (stats.byType[e.detector] ?? 0) + e.count
+    stats.bySite[e.site] = (stats.bySite[e.site] ?? 0) + e.count
+    if (e.action === 'redact') stats.redacted += e.count
+    else if (e.action === 'block') stats.blocked += e.count
+  }
+}
+
+function isLoopbackAddr(addr: string | undefined): boolean {
+  return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1'
 }
 
 interface TextNode {
@@ -137,6 +188,7 @@ export function createProxyServer(opts: ProxyOptions): Server {
     redacted: 0,
     blocked: 0,
     byType: {},
+    bySite: {},
   }
   return createServer((req, res) => void handle(req, res, opts, config, stats))
 }
@@ -159,6 +211,33 @@ async function handle(
   if (path === '/__contextia' || path === '/__contextia/') {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
     res.end(dashboardHtml(stats, opts.mode))
+    return
+  }
+
+  // Secret-free browser catches, folded into the same local dashboard. Loopback
+  // only, and rejected outright if the body carries anything but counts.
+  if (path === '/__contextia/events') {
+    if (req.method !== 'POST' || !isLoopbackAddr(req.socket.remoteAddress)) {
+      res.writeHead(405)
+      res.end()
+      return
+    }
+    const chunks: Buffer[] = []
+    for await (const c of req) chunks.push(c as Buffer)
+    let events: BrowserEvent[] | null = null
+    try {
+      events = parseEventBatch(JSON.parse(Buffer.concat(chunks).toString('utf8')))
+    } catch {
+      events = null
+    }
+    if (!events) {
+      res.writeHead(400, { 'content-type': 'application/json' })
+      res.end('{"error":"invalid event batch"}')
+      return
+    }
+    foldEvents(stats, events)
+    res.writeHead(204)
+    res.end()
     return
   }
 
@@ -253,6 +332,10 @@ function dashboardHtml(stats: ProxyStats, mode: ProxyMode): string {
     .sort((a, b) => b[1] - a[1])
     .map(([t, n]) => `<tr><td>${t}</td><td>${n}</td></tr>`)
     .join('')
+  const siteRows = Object.entries(stats.bySite)
+    .sort((a, b) => b[1] - a[1])
+    .map(([s, n]) => `<tr><td>${s}</td><td>${n}</td></tr>`)
+    .join('')
   const mins = Math.max(1, Math.round((Date.now() - stats.startedAt) / 60000))
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="2">
 <title>Contextia proxy</title><style>
@@ -275,6 +358,7 @@ td:last-child{text-align:right;color:#00D084;font-variant-numeric:tabular-nums}
 <div class="card"><div class="n r">${stats.blocked}</div><div class="l">blocked</div></div>
 </div>
 <table>${rows || '<tr><td class="l">no secrets seen yet</td><td></td></tr>'}</table>
+${siteRows ? `<div class="sub" style="margin:22px 0 8px">by site (browser)</div><table>${siteRows}</table>` : ''}
 </body></html>`
 }
 

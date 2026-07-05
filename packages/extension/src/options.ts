@@ -9,6 +9,8 @@ import {
   type Settings,
 } from './storage.js'
 import { MARK_SVG } from './brand.js'
+import { isLoopbackUrl } from './reporter.js'
+import { api } from './api.js'
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
   { id: 'warn', label: 'Warn', hint: 'Flag and let me decide' },
@@ -206,6 +208,58 @@ function renderAllowlists(app: HTMLElement): void {
   app.append(c)
 }
 
+function renderIntegration(app: HTMLElement): void {
+  const c = card('Local stats endpoint', 'optional')
+  const field = el('div', 'cx-field')
+  field.append(el('label', '', 'Mirror catch counts to a local dashboard (loopback only)'))
+  const input = document.createElement('input')
+  input.type = 'text'
+  input.placeholder = 'http://127.0.0.1:8787/__contextia/events'
+  input.value = settings.localStatsUrl
+  field.append(input)
+  const hint = el(
+    'div',
+    'cx-line-s',
+    'Off by default. Only http://127.0.0.1 or localhost is accepted — counts only, never the secret value. Empty = disabled.',
+  )
+  const status = el('span', 'cx-saved')
+  const show = (text: string) => {
+    status.textContent = text
+    status.classList.add('cx-saved-on')
+    setTimeout(() => status.classList.remove('cx-saved-on'), 1600)
+  }
+  const save = el('button', 'cx-primary', 'Save endpoint') as HTMLButtonElement
+  save.addEventListener('click', async () => {
+    const url = input.value.trim()
+    if (url === '') {
+      await persist({ localStatsUrl: '' })
+      show('Disabled')
+      return
+    }
+    if (!isLoopbackUrl(url)) {
+      show('Not a loopback URL')
+      return
+    }
+    const origin = new URL(url).hostname === 'localhost' ? 'http://localhost/*' : 'http://127.0.0.1/*'
+    let granted = true
+    try {
+      granted = await api.permissions.request({ origins: [origin] })
+    } catch {
+      granted = true // browsers without the prompt (e.g. policy-granted) still work
+    }
+    if (!granted) {
+      show('Permission denied')
+      return
+    }
+    await persist({ localStatsUrl: url })
+    show('Saved')
+  })
+  const actions = el('div', 'cx-actions')
+  actions.append(save, status)
+  c.append(field, hint, actions)
+  app.append(c)
+}
+
 async function renderActivity(app: HTMLElement): Promise<void> {
   const [log, stats] = await Promise.all([getLog(), getStats()])
   const c = card('Activity', `${stats.caught} caught · ${stats.allowed} allowed · ${stats.leaked} leaked`)
@@ -247,6 +301,7 @@ async function render(): Promise<void> {
   renderModes(app)
   renderDetectors(app)
   renderAllowlists(app)
+  renderIntegration(app)
   await renderActivity(app)
 }
 

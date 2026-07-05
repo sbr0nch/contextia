@@ -1,5 +1,48 @@
 import { api } from './api.js'
+import { getSettings } from './storage.js'
+import { isLoopbackUrl, postEvents, type CxEvent } from './reporter.js'
 
-// Minimal service worker / background. Settings defaults are applied lazily by
-// getSettings, so there is nothing to do on install beyond existing.
+// Service worker. Beyond existing, it batches secret-free catch events from the
+// content scripts and forwards them to an optional LOCAL stats endpoint. If no
+// endpoint is configured (the default), nothing is ever sent — zero network.
 api.runtime.onInstalled.addListener(() => {})
+
+// The endpoint can be set by enterprise policy (chrome.storage.managed) or by the
+// user in Options. Policy wins; either way it must be loopback or it's ignored.
+async function endpoint(): Promise<string | null> {
+  try {
+    const managed = await api.storage.managed?.get?.('localStatsUrl')
+    const url = managed?.['localStatsUrl']
+    if (typeof url === 'string' && isLoopbackUrl(url)) return url
+  } catch {
+    // no managed storage on this browser/profile — fall through
+  }
+  const s = await getSettings()
+  return s.localStatsUrl && isLoopbackUrl(s.localStatsUrl) ? s.localStatsUrl : null
+}
+
+let buffer: CxEvent[] = []
+let timer: ReturnType<typeof setTimeout> | undefined
+
+async function flush(): Promise<void> {
+  timer = undefined
+  if (buffer.length === 0) return
+  const url = await endpoint()
+  const batch = buffer
+  buffer = []
+  if (!url) return // feature off — drop, never queue indefinitely
+  try {
+    await postEvents(url, batch)
+  } catch {
+    // fire-and-forget: a missing/asleep endpoint must never affect the page
+  }
+}
+
+api.runtime.onMessage.addListener((msg: unknown) => {
+  const m = msg as { type?: string; event?: CxEvent } | null
+  if (m?.type === 'cx-event' && m.event) {
+    buffer.push(m.event)
+    if (buffer.length >= 50) void flush()
+    else if (!timer) timer = setTimeout(() => void flush(), 2000)
+  }
+})

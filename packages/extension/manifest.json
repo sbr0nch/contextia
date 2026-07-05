@@ -2,8 +2,9 @@
   "manifest_version": 3,
   "name": "Contextia",
   "version": "0.0.0",
-  "description": "Catch secrets before they reach an AI chat. Local, on-device, no network.",
+  "description": "Catch secrets before they reach an AI chat. Local and on-device — nothing leaves your machine.",
   "permissions": ["storage"],
+  "optional_host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://claude.ai/*",

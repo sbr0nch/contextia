@@ -7,7 +7,7 @@ consoles. Keep it honest. The same copy works for all three stores.
 Contextia — Secret guard for AI chats
 
 ## Summary (max 132 chars)
-Catch API keys, tokens and credentials before you paste them into ChatGPT or Claude. Local, on-device, zero network.
+Catch API keys, tokens and credentials before you paste them into ChatGPT or Claude. Local and on-device — nothing leaves your machine.
 
 ## Category
 Developer Tools
@@ -33,7 +33,10 @@ What it does:
 • A local detections log and stats — stored on your device, never the secret value.
 
 Privacy by construction:
-• Zero network requests. No accounts, no servers, no telemetry, no third parties.
+• Nothing leaves your machine. No accounts, no servers, no telemetry, no third parties.
+• Zero network by default. Optionally, you can mirror catch counts (never the secret)
+  to a local loopback dashboard on your own device — off unless you enable it, and it
+  refuses any non-loopback address.
 • Runs only on supported AI chat sites (ChatGPT, Claude, Gemini, Copilot, Perplexity, DeepSeek). Requests no other access.
 • Open source (MIT) — audit every line: https://github.com/sbr0nch/contextia
 
@@ -50,11 +53,18 @@ them before submitting — entirely on-device.
 - host access (chatgpt.com, claude.ai, gemini.google.com, aistudio.google.com,
   copilot.microsoft.com, www.perplexity.ai, chat.deepseek.com): read the composer
   text on these AI chat sites to scan it locally. No other hosts are requested.
-  No remote code, no network.
+  No remote code.
+- optional host access (http://127.0.0.1/*, http://localhost/*): requested only if
+  the user turns on the optional local stats endpoint, so the extension can post
+  aggregate counts (never the secret) to a dashboard on the user's own machine.
+  Loopback only; not requested otherwise.
 
 ## Data usage disclosures (store privacy form)
-- Does this item collect or use user data? No data is collected or transmitted.
-- All processing is local; nothing is sent off-device. No analytics, no tracking.
+- Does this item collect or use user data? No data is collected or transmitted
+  off the device.
+- All processing is local. The optional local stats endpoint sends only aggregate
+  counts (never the secret value) to a loopback address on the user's own machine,
+  and only if the user enables it. No analytics, no tracking, no third parties.
 
 ## Privacy policy URL
 Use either:

@@ -11,7 +11,7 @@ your browser. Everything runs on-device.
 [![CI](https://github.com/sbr0nch/contextia/actions/workflows/ci.yml/badge.svg)](https://github.com/sbr0nch/contextia/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@sbr0nch/contextia?label=%40sbr0nch%2Fcontextia)](https://www.npmjs.com/package/@sbr0nch/contextia)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
-[![zero network](https://img.shields.io/badge/network-zero%20requests-00D084)](#privacy)
+[![on-device](https://img.shields.io/badge/data-never%20leaves%20device-00D084)](#privacy)
 
 > A safety net, not a guarantee. Detection is rule-based and can miss things —
 > treat it as a guardrail, not proof that a paste is clean.
@@ -80,8 +80,10 @@ values/patterns to always redact.
 
 ## Privacy
 
-The browser extension makes **zero network requests** — no accounts, servers,
-analytics or telemetry. The proxy only forwards your agent's own request to the
+**Nothing leaves your machine** — no accounts, servers, analytics or telemetry.
+By default the browser extension makes zero network requests; it can optionally
+mirror catch **counts** (never the secret) to a **loopback** dashboard on your own
+device, and nowhere else. The proxy only forwards your agent's own request to the
 LLM API it was already calling. A local detections log never stores the matched
 secret value. Full policy: [`PRIVACY.md`](./PRIVACY.md).
 

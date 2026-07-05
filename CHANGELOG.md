@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.3.0
+
+- Optional **local stats endpoint**: the browser extension can mirror catch
+  **counts** (detector, site, action, count — never the secret value) to a
+  loopback dashboard, so terminal and browser detections show up in one place.
+  Off by default; the extension refuses any non-loopback URL, and can be
+  preconfigured by enterprise policy via `chrome.storage.managed`.
+- Proxy: accepts `POST /__contextia/events` (loopback only) and folds the counts
+  into the existing stats and dashboard, including a new by-site breakdown. The
+  endpoint rejects any body carrying a field outside the counts whitelist.
+- The extension is **zero network by default**; the only network path is the
+  opt-in, loopback-guarded reporter, covered by tests.
+
 ## v1.2.1
 
 - Claude Code plugin: optional `CONTEXTIA_CONFIG` environment variable to point at

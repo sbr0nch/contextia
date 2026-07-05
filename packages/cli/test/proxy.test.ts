@@ -1,7 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { textNodes, processPayload, resolveUpstream, configFor, createProxyServer, type ProxyMode } from '../src/proxy.js'
+import {
+  textNodes,
+  processPayload,
+  resolveUpstream,
+  configFor,
+  createProxyServer,
+  parseEventBatch,
+  foldEvents,
+  type ProxyMode,
+  type ProxyStats,
+} from '../src/proxy.js'
 
 function listen(server: Server): Promise<number> {
   return new Promise((resolve) => server.listen(0, () => resolve((server.address() as AddressInfo).port)))
@@ -62,6 +72,37 @@ describe('textNodes / processPayload', () => {
     const text = body.messages[0]!.content
     expect(text).not.toMatch(/Zephyr|42-7|AKIAIOSFODNN7EXAMPLE/)
     expect(text).toContain('⟨redacted:custom⟩')
+  })
+})
+
+describe('browser events (/__contextia/events)', () => {
+  const emptyStats = (): ProxyStats => ({
+    startedAt: 0, requests: 0, withFindings: 0, redacted: 0, blocked: 0, byType: {}, bySite: {},
+  })
+
+  it('accepts a counts-only batch and rejects anything with extra fields', () => {
+    expect(parseEventBatch({ events: [{ ts: '2026-01-01T00:00:00Z', site: 'chatgpt.com', detector: 'aws_access_key_id', action: 'warn', count: 1 }] })).toHaveLength(1)
+    // a stray field (e.g. someone trying to smuggle the value) → whole batch rejected
+    expect(parseEventBatch({ events: [{ ts: 't', site: 's', detector: 'd', action: 'warn', count: 1, match: 'AKIA...' }] })).toBeNull()
+    expect(parseEventBatch({ events: [{ site: 's', detector: 'd', action: 'warn', count: 1 }] })).toBeNull() // missing ts
+    expect(parseEventBatch({ events: [{ ts: 't', site: 's', detector: 'd', action: 'nope', count: 1 }] })).toBeNull() // bad action
+    expect(parseEventBatch({ events: [{ ts: 't', site: 's', detector: 'd', action: 'warn', count: 0 }] })).toBeNull() // bad count
+    expect(parseEventBatch({ events: [] })).toBeNull()
+    expect(parseEventBatch({})).toBeNull()
+  })
+
+  it('folds counts into stats like terminal catches', () => {
+    const stats = emptyStats()
+    foldEvents(stats, [
+      { ts: 't', site: 'chatgpt.com', detector: 'aws_access_key_id', action: 'block', count: 2 },
+      { ts: 't', site: 'claude.ai', detector: 'github_token', action: 'redact', count: 1 },
+    ])
+    expect(stats.byType).toEqual({ aws_access_key_id: 2, github_token: 1 })
+    expect(stats.bySite).toEqual({ 'chatgpt.com': 2, 'claude.ai': 1 })
+    expect(stats.blocked).toBe(2)
+    expect(stats.redacted).toBe(1)
+    expect(stats.withFindings).toBe(3)
+    expect(stats.requests).toBe(0) // request count is left untouched
   })
 })
 
