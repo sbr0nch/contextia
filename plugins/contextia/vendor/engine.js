@@ -777,6 +777,67 @@ var usSsn = {
   }
 };
 
+// packages/engine/src/detectors/india-aadhaar.ts
+var D = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+  [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+  [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+  [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+  [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+  [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+  [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+  [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+  [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+];
+var P = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+  [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+  [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+  [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+  [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+  [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+  [7, 0, 4, 6, 9, 1, 3, 2, 5, 8]
+];
+function verhoeffValid(num) {
+  let c = 0;
+  const digits = num.split("").reverse();
+  for (let i = 0; i < digits.length; i++) {
+    c = D[c][P[i % 8][Number(digits[i])]];
+  }
+  return c === 0;
+}
+var CANDIDATE4 = /\b[2-9]\d{3}\s?\d{4}\s?\d{4}\b/g;
+var indiaAadhaar = {
+  id: "india_aadhaar",
+  label: "India Aadhaar number",
+  severity: "warning",
+  defaultEnabled: false,
+  rationale: "A Verhoeff-valid Aadhaar number. Sharing national ID data with an AI assistant risks personal-data exposure.",
+  scan(text) {
+    const out = [];
+    for (const m of text.matchAll(CANDIDATE4)) {
+      const digits = m[0].replace(/\s/g, "");
+      if (digits.length === 12 && verhoeffValid(digits)) {
+        out.push({ start: m.index, end: m.index + m[0].length, match: m[0] });
+      }
+    }
+    return out;
+  },
+  fixtures: {
+    positives: ["2341 2345 6783", "234123456796"],
+    negatives: [
+      "234123456784",
+      // fails the Verhoeff checksum
+      "1234 5678 9012",
+      // starts with 1 (never issued)
+      "order 1234 5678 placed"
+      // too short
+    ]
+  }
+};
+
 // packages/engine/src/detectors/generated.ts
 var RE_0 = new RegExp("\\b[0-9a-f]{32}-us\\d{1,2}\\b", "g");
 var RE_1 = new RegExp("\\bkey-[0-9a-zA-Z]{32}\\b", "g");
@@ -825,6 +886,9 @@ var RE_43 = new RegExp("\\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}\\b", "g");
 var RE_44 = new RegExp("\\b9\\d{2}-[5-9]\\d-\\d{4}\\b", "g");
 var RE_45 = new RegExp("\\b0x[a-fA-F0-9]{40}\\b", "g");
 var RE_46 = new RegExp("\\bbc1[a-z0-9]{25,39}\\b", "g");
+var RE_47 = new RegExp("\\+[1-9]\\d{7,14}\\b", "g");
+var RE_48 = new RegExp("\\b[A-Z]{3}[ABCFGHLJPT][A-Z]\\d{4}[A-Z]\\b", "g");
+var RE_49 = new RegExp("\\b[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\\d{6}[A-D]\\b", "g");
 var generated = [
   {
     id: "mailchimp_key",
@@ -1201,6 +1265,30 @@ var generated = [
     defaultEnabled: false,
     scan: (text) => matchAll(RE_46, text),
     fixtures: { positives: ["bc1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bc1qqqqqqqqqqqqqqqqqqqqqqqqq"], negatives: ["bc1short", "bc2aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a bitcoin address"] }
+  },
+  {
+    id: "phone_e164",
+    label: "Phone number (E.164)",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_47, text),
+    fixtures: { positives: ["+14155552671", "+919876543210"], negatives: ["+0123456789", "4155552671", "call us anytime"] }
+  },
+  {
+    id: "india_pan",
+    label: "India PAN",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_48, text),
+    fixtures: { positives: ["ABCPE1234F", "AAAPA0000A"], negatives: ["ABCDE1234F", "ABCPE12345", "a pan card"] }
+  },
+  {
+    id: "uk_nino",
+    label: "UK National Insurance number",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_49, text),
+    fixtures: { positives: ["AB123456C", "JG567890A"], negatives: ["DA123456C", "AB123456E", "a nino value"] }
   }
 ];
 
@@ -1238,6 +1326,7 @@ var detectors = [
   creditCard,
   iban,
   usSsn,
+  indiaAadhaar,
   ...generated
 ];
 var detectorsById = new Map(

@@ -25,11 +25,13 @@
   Intra42, Facebook, and Sentry user tokens. Each carries a distinctive literal
   prefix (so false positives stay near zero) and passes the automatic FP gate.
   Resend also matches as a standalone token, not only inside `RESEND_API_KEY=`.
-- Structured personal-data detectors (79 total), opt-in like the existing PII
-  ones: US Social Security Number (with area/group/serial validation), US ITIN,
-  and crypto — Bitcoin private keys (WIF, on by default as they are secrets),
-  Ethereum and Bitcoin (bech32) addresses. Free-text categories that need an NLP
-  model (names, addresses) are deliberately out of scope for the on-device engine.
+- Structured personal-data detectors (83 total), opt-in like the existing PII
+  ones: US Social Security Number (area/group/serial validation), US ITIN, India
+  Aadhaar (Verhoeff checksum), India PAN, UK National Insurance number, E.164
+  phone numbers, and crypto — Bitcoin private keys (WIF, on by default as they are
+  secrets), Ethereum and Bitcoin (bech32) addresses. Free-text categories that
+  need an NLP model (names, addresses) are deliberately out of scope for the
+  deterministic on-device engine.
 
 ## v1.2.1
 

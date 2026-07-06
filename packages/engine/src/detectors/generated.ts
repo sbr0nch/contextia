@@ -50,6 +50,9 @@ const RE_43 = new RegExp("\\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}\\b", "g")
 const RE_44 = new RegExp("\\b9\\d{2}-[5-9]\\d-\\d{4}\\b", "g")
 const RE_45 = new RegExp("\\b0x[a-fA-F0-9]{40}\\b", "g")
 const RE_46 = new RegExp("\\bbc1[a-z0-9]{25,39}\\b", "g")
+const RE_47 = new RegExp("\\+[1-9]\\d{7,14}\\b", "g")
+const RE_48 = new RegExp("\\b[A-Z]{3}[ABCFGHLJPT][A-Z]\\d{4}[A-Z]\\b", "g")
+const RE_49 = new RegExp("\\b[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\\d{6}[A-D]\\b", "g")
 
 export const generated: Detector[] = [
   {
@@ -427,5 +430,29 @@ export const generated: Detector[] = [
     defaultEnabled: false,
     scan: (text) => matchAll(RE_46, text),
     fixtures: { positives: ["bc1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","bc1qqqqqqqqqqqqqqqqqqqqqqqqq"], negatives: ["bc1short","bc2aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","a bitcoin address"] },
+  },
+  {
+    id: "phone_e164",
+    label: "Phone number (E.164)",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_47, text),
+    fixtures: { positives: ["+14155552671","+919876543210"], negatives: ["+0123456789","4155552671","call us anytime"] },
+  },
+  {
+    id: "india_pan",
+    label: "India PAN",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_48, text),
+    fixtures: { positives: ["ABCPE1234F","AAAPA0000A"], negatives: ["ABCDE1234F","ABCPE12345","a pan card"] },
+  },
+  {
+    id: "uk_nino",
+    label: "UK National Insurance number",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_49, text),
+    fixtures: { positives: ["AB123456C","JG567890A"], negatives: ["DA123456C","AB123456E","a nino value"] },
   },
 ]
