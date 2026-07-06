@@ -342,5 +342,37 @@
     "pattern": "\\bsntryu_[a-f0-9_]{64}\\b",
     "positives": ["sntryu_{a:31}_{a:32}", "sntryu_{b:31}_{b:32}"],
     "negatives": ["sntryu_short", "sntryx_{a:64}", "a sentry issue"]
+  },
+  {
+    "id": "bitcoin_wif_key",
+    "label": "Bitcoin private key (WIF)",
+    "severity": "critical",
+    "pattern": "\\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}\\b",
+    "positives": ["5{a:50}", "K{b:51}"],
+    "negatives": ["5{a:49}", "0{a:50}", "a bitcoin wallet"]
+  },
+  {
+    "id": "us_itin",
+    "label": "US Individual Taxpayer Identification Number",
+    "severity": "warning",
+    "pattern": "\\b9\\d{2}-[5-9]\\d-\\d{4}\\b",
+    "positives": ["912-70-1234", "999-95-6789"],
+    "negatives": ["912-40-1234", "123-70-1234", "an itin value"]
+  },
+  {
+    "id": "ethereum_address",
+    "label": "Ethereum address",
+    "severity": "warning",
+    "pattern": "\\b0x[a-fA-F0-9]{40}\\b",
+    "positives": ["0x{a:40}", "0x{A:40}"],
+    "negatives": ["0x{a:39}", "0x{g:40}", "a wallet address"]
+  },
+  {
+    "id": "bitcoin_address",
+    "label": "Bitcoin address (bech32)",
+    "severity": "warning",
+    "pattern": "\\bbc1[a-z0-9]{25,39}\\b",
+    "positives": ["bc1{a:30}", "bc1{q:25}"],
+    "negatives": ["bc1short", "bc2{a:30}", "a bitcoin address"]
   }
 ]

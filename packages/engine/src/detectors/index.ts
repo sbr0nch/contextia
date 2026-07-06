@@ -30,6 +30,7 @@ import { squareToken } from './square-token.js'
 import { stripeWebhookSecret } from './stripe-webhook-secret.js'
 import { creditCard } from './credit-card.js'
 import { iban } from './iban.js'
+import { usSsn } from './us-ssn.js'
 import { generated } from './generated.js'
 
 /** The active detector registry. Add new detectors here. */
@@ -65,6 +66,7 @@ export const detectors: Detector[] = [
   email,
   creditCard,
   iban,
+  usSsn,
   ...generated,
 ]
 

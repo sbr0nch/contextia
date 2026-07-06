@@ -735,6 +735,48 @@ var iban = {
   }
 };
 
+// packages/engine/src/detectors/us-ssn.ts
+var CANDIDATE3 = /\b(\d{3})[- ](\d{2})[- ](\d{4})\b/g;
+function isValidSsn(area, group, serial) {
+  const a = Number(area);
+  if (a === 0 || a === 666 || a >= 900) return false;
+  if (Number(group) === 0 || Number(serial) === 0) return false;
+  return true;
+}
+var usSsn = {
+  id: "us_ssn",
+  label: "US Social Security Number",
+  severity: "warning",
+  defaultEnabled: false,
+  rationale: "A structurally valid US SSN. Sharing it with an AI assistant risks exposing personal identity data.",
+  scan(text) {
+    const out = [];
+    for (const m of text.matchAll(CANDIDATE3)) {
+      if (!isValidSsn(m[1], m[2], m[3])) continue;
+      const start = m.index;
+      out.push({ start, end: start + m[0].length, match: m[0] });
+    }
+    return out;
+  },
+  fixtures: {
+    positives: ["123-45-6789", "078-05-1120", "536 90 4399"],
+    negatives: [
+      "000-12-3456",
+      // area 000 is never issued
+      "666-12-3456",
+      // area 666 is never issued
+      "900-12-3456",
+      // area 900+ is never issued (ITIN space)
+      "123-00-6789",
+      // group 00
+      "123-45-0000",
+      // serial 0000
+      "call 123-456-7890"
+      // phone shape, not 3-2-4
+    ]
+  }
+};
+
 // packages/engine/src/detectors/generated.ts
 var RE_0 = new RegExp("\\b[0-9a-f]{32}-us\\d{1,2}\\b", "g");
 var RE_1 = new RegExp("\\bkey-[0-9a-zA-Z]{32}\\b", "g");
@@ -779,6 +821,10 @@ var RE_39 = new RegExp("\\brdme_[a-z0-9_]{70}\\b", "g");
 var RE_40 = new RegExp("\\bs-s4t2(?:ud|af)-[a-f0-9_]{64}\\b", "g");
 var RE_41 = new RegExp("\\bEAA[MC][A-Za-z0-9_]{100,}\\b", "g");
 var RE_42 = new RegExp("\\bsntryu_[a-f0-9_]{64}\\b", "g");
+var RE_43 = new RegExp("\\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}\\b", "g");
+var RE_44 = new RegExp("\\b9\\d{2}-[5-9]\\d-\\d{4}\\b", "g");
+var RE_45 = new RegExp("\\b0x[a-fA-F0-9]{40}\\b", "g");
+var RE_46 = new RegExp("\\bbc1[a-z0-9]{25,39}\\b", "g");
 var generated = [
   {
     id: "mailchimp_key",
@@ -1123,6 +1169,38 @@ var generated = [
     defaultEnabled: true,
     scan: (text) => matchAll(RE_42, text),
     fixtures: { positives: ["sntryu_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sntryu_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["sntryu_short", "sntryx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a sentry issue"] }
+  },
+  {
+    id: "bitcoin_wif_key",
+    label: "Bitcoin private key (WIF)",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_43, text),
+    fixtures: { positives: ["5aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Kbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["5aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a bitcoin wallet"] }
+  },
+  {
+    id: "us_itin",
+    label: "US Individual Taxpayer Identification Number",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_44, text),
+    fixtures: { positives: ["912-70-1234", "999-95-6789"], negatives: ["912-40-1234", "123-70-1234", "an itin value"] }
+  },
+  {
+    id: "ethereum_address",
+    label: "Ethereum address",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_45, text),
+    fixtures: { positives: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "0xgggggggggggggggggggggggggggggggggggggggg", "a wallet address"] }
+  },
+  {
+    id: "bitcoin_address",
+    label: "Bitcoin address (bech32)",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_46, text),
+    fixtures: { positives: ["bc1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bc1qqqqqqqqqqqqqqqqqqqqqqqqq"], negatives: ["bc1short", "bc2aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a bitcoin address"] }
   }
 ];
 
@@ -1159,6 +1237,7 @@ var detectors = [
   email,
   creditCard,
   iban,
+  usSsn,
   ...generated
 ];
 var detectorsById = new Map(
