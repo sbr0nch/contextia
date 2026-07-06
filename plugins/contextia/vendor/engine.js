@@ -735,6 +735,109 @@ var iban = {
   }
 };
 
+// packages/engine/src/detectors/us-ssn.ts
+var CANDIDATE3 = /\b(\d{3})[- ](\d{2})[- ](\d{4})\b/g;
+function isValidSsn(area, group, serial) {
+  const a = Number(area);
+  if (a === 0 || a === 666 || a >= 900) return false;
+  if (Number(group) === 0 || Number(serial) === 0) return false;
+  return true;
+}
+var usSsn = {
+  id: "us_ssn",
+  label: "US Social Security Number",
+  severity: "warning",
+  defaultEnabled: false,
+  rationale: "A structurally valid US SSN. Sharing it with an AI assistant risks exposing personal identity data.",
+  scan(text) {
+    const out = [];
+    for (const m of text.matchAll(CANDIDATE3)) {
+      if (!isValidSsn(m[1], m[2], m[3])) continue;
+      const start = m.index;
+      out.push({ start, end: start + m[0].length, match: m[0] });
+    }
+    return out;
+  },
+  fixtures: {
+    positives: ["123-45-6789", "078-05-1120", "536 90 4399"],
+    negatives: [
+      "000-12-3456",
+      // area 000 is never issued
+      "666-12-3456",
+      // area 666 is never issued
+      "900-12-3456",
+      // area 900+ is never issued (ITIN space)
+      "123-00-6789",
+      // group 00
+      "123-45-0000",
+      // serial 0000
+      "call 123-456-7890"
+      // phone shape, not 3-2-4
+    ]
+  }
+};
+
+// packages/engine/src/detectors/india-aadhaar.ts
+var D = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+  [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+  [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+  [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+  [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+  [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+  [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+  [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+  [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+];
+var P = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+  [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+  [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+  [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+  [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+  [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+  [7, 0, 4, 6, 9, 1, 3, 2, 5, 8]
+];
+function verhoeffValid(num) {
+  let c = 0;
+  const digits = num.split("").reverse();
+  for (let i = 0; i < digits.length; i++) {
+    c = D[c][P[i % 8][Number(digits[i])]];
+  }
+  return c === 0;
+}
+var CANDIDATE4 = /\b[2-9]\d{3}\s?\d{4}\s?\d{4}\b/g;
+var indiaAadhaar = {
+  id: "india_aadhaar",
+  label: "India Aadhaar number",
+  severity: "warning",
+  defaultEnabled: false,
+  rationale: "A Verhoeff-valid Aadhaar number. Sharing national ID data with an AI assistant risks personal-data exposure.",
+  scan(text) {
+    const out = [];
+    for (const m of text.matchAll(CANDIDATE4)) {
+      const digits = m[0].replace(/\s/g, "");
+      if (digits.length === 12 && verhoeffValid(digits)) {
+        out.push({ start: m.index, end: m.index + m[0].length, match: m[0] });
+      }
+    }
+    return out;
+  },
+  fixtures: {
+    positives: ["2341 2345 6783", "234123456796"],
+    negatives: [
+      "234123456784",
+      // fails the Verhoeff checksum
+      "1234 5678 9012",
+      // starts with 1 (never issued)
+      "order 1234 5678 placed"
+      // too short
+    ]
+  }
+};
+
 // packages/engine/src/detectors/generated.ts
 var RE_0 = new RegExp("\\b[0-9a-f]{32}-us\\d{1,2}\\b", "g");
 var RE_1 = new RegExp("\\bkey-[0-9a-zA-Z]{32}\\b", "g");
@@ -763,6 +866,29 @@ var RE_23 = new RegExp("\\bfw_[0-9A-Za-z]{24,}\\b", "g");
 var RE_24 = new RegExp("\\bATATT3x[A-Za-z0-9_=+/.-]{150,}\\b", "g");
 var RE_25 = new RegExp("\\btskey-(?:auth|api|client)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{20,}\\b", "g");
 var RE_26 = new RegExp("\\bre_(?=[A-Za-z0-9_]*\\d)[A-Za-z0-9_]{22,}\\b", "g");
+var RE_27 = new RegExp("\\bhvs\\.[A-Za-z0-9._-]{90,120}\\b", "g");
+var RE_28 = new RegExp("\\bdt0c01\\.[A-Za-z0-9_]{24}\\.[A-Za-z0-9_]{64}\\b", "g");
+var RE_29 = new RegExp("\\btfp_[A-Za-z0-9._=-]{59}", "g");
+var RE_30 = new RegExp("\\bpnu_[A-Za-z0-9_]{36}\\b", "g");
+var RE_31 = new RegExp("\\brubygems_[a-f0-9_]{48}\\b", "g");
+var RE_32 = new RegExp("\\bCLOJARS_[A-Za-z0-9_]{60}\\b", "g");
+var RE_33 = new RegExp("\\bduffel_(?:test|live)_[A-Za-z0-9._=-]{43}", "g");
+var RE_34 = new RegExp("\\bfio-u-[A-Za-z0-9._=-]{64}", "g");
+var RE_35 = new RegExp("\\bshippo_(?:live|test)_[a-fA-F0-9_]{40}\\b", "g");
+var RE_36 = new RegExp("\\bEZAK[A-Za-z0-9_]{54}\\b", "g");
+var RE_37 = new RegExp("\\bLTAI[A-Za-z0-9_]{20}\\b", "g");
+var RE_38 = new RegExp("\\bAGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L_]{58}\\b", "g");
+var RE_39 = new RegExp("\\brdme_[a-z0-9_]{70}\\b", "g");
+var RE_40 = new RegExp("\\bs-s4t2(?:ud|af)-[a-f0-9_]{64}\\b", "g");
+var RE_41 = new RegExp("\\bEAA[MC][A-Za-z0-9_]{100,}\\b", "g");
+var RE_42 = new RegExp("\\bsntryu_[a-f0-9_]{64}\\b", "g");
+var RE_43 = new RegExp("\\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}\\b", "g");
+var RE_44 = new RegExp("\\b9\\d{2}-[5-9]\\d-\\d{4}\\b", "g");
+var RE_45 = new RegExp("\\b0x[a-fA-F0-9]{40}\\b", "g");
+var RE_46 = new RegExp("\\bbc1[a-z0-9]{25,39}\\b", "g");
+var RE_47 = new RegExp("\\+[1-9]\\d{7,14}\\b", "g");
+var RE_48 = new RegExp("\\b[A-Z]{3}[ABCFGHLJPT][A-Z]\\d{4}[A-Z]\\b", "g");
+var RE_49 = new RegExp("\\b[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\\d{6}[A-D]\\b", "g");
 var generated = [
   {
     id: "mailchimp_key",
@@ -979,6 +1105,190 @@ var generated = [
     defaultEnabled: true,
     scan: (text) => matchAll(RE_26, text),
     fixtures: { positives: ["re_aaaaaaaaaa1aaaaaaaaaaaa", "re_bbbbbbbbbbbb2bbbbbbbbbbbb"], negatives: ["re_render_component_wrapper_factory", "re_short", "a resend email"] }
+  },
+  {
+    id: "hashicorp_vault_token",
+    label: "HashiCorp Vault service token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_27, text),
+    fixtures: { positives: ["hvs.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "hvs.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["hvs.short", "hvx.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a vault token"] }
+  },
+  {
+    id: "dynatrace_token",
+    label: "Dynatrace API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_28, text),
+    fixtures: { positives: ["dt0c01.aaaaaaaaaaa_aaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "dt0c01.ccccccccccc_cccccccccccc.ddddddddddddddddddddddddddddddd_dddddddddddddddddddddddddddddddd"], negatives: ["dt0c01.aaaaaaaaaaaaaaaaaaaaaaaa.short", "dt0c02.aaaaaaaaaaa_aaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "a dynatrace token"] }
+  },
+  {
+    id: "typeform_token",
+    label: "Typeform API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_29, text),
+    fixtures: { positives: ["tfp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "tfp_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"], negatives: ["tfp_short", "tfx_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "a typeform survey"] }
+  },
+  {
+    id: "prefect_token",
+    label: "Prefect API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_30, text),
+    fixtures: { positives: ["pnu_aaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaa", "pnu_bbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbb"], negatives: ["pnu_short", "pnx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a prefect flow"] }
+  },
+  {
+    id: "rubygems_token",
+    label: "RubyGems API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_31, text),
+    fixtures: { positives: ["rubygems_aaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaa", "rubygems_bbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["rubygems_short", "rubygemx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a ruby gem"] }
+  },
+  {
+    id: "clojars_token",
+    label: "Clojars API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_32, text),
+    fixtures: { positives: ["CLOJARS_aaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "CLOJARS_bbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["CLOJARS_short", "CLOJARX_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a clojure lib"] }
+  },
+  {
+    id: "duffel_token",
+    label: "Duffel API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_33, text),
+    fixtures: { positives: ["duffel_test_aaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaa", "duffel_live_bbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbb"], negatives: ["duffel_test_short", "duffel_prod_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a duffel booking"] }
+  },
+  {
+    id: "frameio_token",
+    label: "Frame.io API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_34, text),
+    fixtures: { positives: ["fio-u-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fio-u-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["fio-u-short", "fio-x-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a frame io asset"] }
+  },
+  {
+    id: "shippo_token",
+    label: "Shippo API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_35, text),
+    fixtures: { positives: ["shippo_live_aaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaa", "shippo_test_bbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbb"], negatives: ["shippo_live_short", "shippo_prod_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a shippo label"] }
+  },
+  {
+    id: "easypost_token",
+    label: "EasyPost API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_36, text),
+    fixtures: { positives: ["EZAKaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaa", "EZAKbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["EZAKshort", "EZAXaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "an easypost shipment"] }
+  },
+  {
+    id: "alibaba_access_key",
+    label: "Alibaba Cloud AccessKey ID",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_37, text),
+    fixtures: { positives: ["LTAIaaaaaaaaa_aaaaaaaaaa", "LTAIbbbbbbbbb_bbbbbbbbbb"], negatives: ["LTAIshort", "LTAXaaaaaaaaaaaaaaaaaaaa", "an alibaba account"] }
+  },
+  {
+    id: "age_secret_key",
+    label: "age secret key",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_38, text),
+    fixtures: { positives: ["AGE-SECRET-KEY-1QQQQQQQQQQQQQQQQQQQQQQQQQQQQ_QQQQQQQQQQQQQQQQQQQQQQQQQQQQQ", "AGE-SECRET-KEY-1AAAAAAAAAAAAAAAAAAAAAAAAAAAA_AAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["AGE-SECRET-KEY-1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ", "AGE-PUBLIC-KEY-1QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ", "an age identity"] }
+  },
+  {
+    id: "readme_token",
+    label: "ReadMe API token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_39, text),
+    fixtures: { positives: ["rdme_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "rdme_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["rdme_short", "rdmx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a readme file"] }
+  },
+  {
+    id: "intra42_secret",
+    label: "Intra42 client secret",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_40, text),
+    fixtures: { positives: ["s-s4t2ud-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "s-s4t2af-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["s-s4t2ud-short", "s-s4t2xx-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "an intra42 app"] }
+  },
+  {
+    id: "facebook_token",
+    label: "Facebook access token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_41, text),
+    fixtures: { positives: ["EAAMaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "EAACbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["EAAMaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "EAAXaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a facebook post"] }
+  },
+  {
+    id: "sentry_user_token",
+    label: "Sentry user token",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_42, text),
+    fixtures: { positives: ["sntryu_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sntryu_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["sntryu_short", "sntryx_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a sentry issue"] }
+  },
+  {
+    id: "bitcoin_wif_key",
+    label: "Bitcoin private key (WIF)",
+    severity: "critical",
+    defaultEnabled: true,
+    scan: (text) => matchAll(RE_43, text),
+    fixtures: { positives: ["5aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "Kbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], negatives: ["5aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a bitcoin wallet"] }
+  },
+  {
+    id: "us_itin",
+    label: "US Individual Taxpayer Identification Number",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_44, text),
+    fixtures: { positives: ["912-70-1234", "999-95-6789"], negatives: ["912-40-1234", "123-70-1234", "an itin value"] }
+  },
+  {
+    id: "ethereum_address",
+    label: "Ethereum address",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_45, text),
+    fixtures: { positives: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"], negatives: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "0xgggggggggggggggggggggggggggggggggggggggg", "a wallet address"] }
+  },
+  {
+    id: "bitcoin_address",
+    label: "Bitcoin address (bech32)",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_46, text),
+    fixtures: { positives: ["bc1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bc1qqqqqqqqqqqqqqqqqqqqqqqqq"], negatives: ["bc1short", "bc2aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "a bitcoin address"] }
+  },
+  {
+    id: "phone_e164",
+    label: "Phone number (E.164)",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_47, text),
+    fixtures: { positives: ["+14155552671", "+919876543210"], negatives: ["+0123456789", "4155552671", "call us anytime"] }
+  },
+  {
+    id: "india_pan",
+    label: "India PAN",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_48, text),
+    fixtures: { positives: ["ABCPE1234F", "AAAPA0000A"], negatives: ["ABCDE1234F", "ABCPE12345", "a pan card"] }
+  },
+  {
+    id: "uk_nino",
+    label: "UK National Insurance number",
+    severity: "warning",
+    defaultEnabled: false,
+    scan: (text) => matchAll(RE_49, text),
+    fixtures: { positives: ["AB123456C", "JG567890A"], negatives: ["DA123456C", "AB123456E", "a nino value"] }
   }
 ];
 
@@ -1015,6 +1325,8 @@ var detectors = [
   email,
   creditCard,
   iban,
+  usSsn,
+  indiaAadhaar,
   ...generated
 ];
 var detectorsById = new Map(

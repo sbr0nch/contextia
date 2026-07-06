@@ -19,8 +19,19 @@
 - Wider `KEY=value` coverage: `ENCRYPTION_KEY`, `SIGNING_KEY`, `MASTER_KEY` and
   `SESSION_KEY` assignments are now caught, without flagging non-secret names like
   `ENCRYPTION_ALGORITHM` or `PRIMARY_KEY`.
-- New detector (59 total): Resend API keys (`re_…`), matched as a standalone
-  token, not only inside `RESEND_API_KEY=`.
+- 17 more detectors, a distinctive-prefix parity pass against the gitleaks rule
+  set: Resend, HashiCorp Vault, Dynatrace, Typeform, Prefect, RubyGems, Clojars,
+  Duffel, Frame.io, Shippo, EasyPost, Alibaba Cloud AccessKey, age, ReadMe,
+  Intra42, Facebook, and Sentry user tokens. Each carries a distinctive literal
+  prefix (so false positives stay near zero) and passes the automatic FP gate.
+  Resend also matches as a standalone token, not only inside `RESEND_API_KEY=`.
+- Structured personal-data detectors (83 total), opt-in like the existing PII
+  ones: US Social Security Number (area/group/serial validation), US ITIN, India
+  Aadhaar (Verhoeff checksum), India PAN, UK National Insurance number, E.164
+  phone numbers, and crypto — Bitcoin private keys (WIF, on by default as they are
+  secrets), Ethereum and Bitcoin (bech32) addresses. Free-text categories that
+  need an NLP model (names, addresses) are deliberately out of scope for the
+  deterministic on-device engine.
 
 ## v1.2.1
 
