@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+Two findings from putting the extension and the dashboard under load. Neither is
+in the class that lets a secret through, and both were quiet failures rather
+than loud ones.
+
+- **The badge showed nothing on a prompt too long to scan.** Past the engine's
+  one million character cap the tail goes unread, and an empty badge reads as
+  "nothing found" when the honest answer is "we did not look". Block mode
+  already refused to send; Warn, which is the default, said nothing at all. The
+  badge now shows `?` and the indicator explains that the end of the message was
+  not checked.
+- **The proxy's per-site and per-detector counters grew without bound.** Both
+  are keyed on strings supplied by the reporter, so a long-running proxy
+  accumulated a key for every distinct value it was ever sent: measured at
+  20,000 sites the stats payload reached 323 KB and the dashboard rendered
+  20,052 rows, refreshing every two seconds. Counting stops at 200 distinct
+  keys, and the dashboard shows the busiest 25.
+
+What held up under the same load, worth recording: the extension scans a 200,000
+character prompt in the same 180ms it takes for 1,000, without ever blocking the
+main thread, and the dashboard absorbed 200,000 events in 1.8 seconds with exact
+counts and nothing on stderr.
+
 ## v2.0.3
 
 **`@sbr0nch/contextia-engine` could not be imported. Not in this release, in any

@@ -157,16 +157,25 @@ export class Hud {
     document.body.appendChild(this.host)
   }
 
-  setState(findings: Finding[], composer: Composer | null, mode: Mode): void {
+  /**
+   * `truncated` means the composer was longer than the engine could read, so the
+   * tail went unscanned. Showing a quiet zero there is the one thing this must
+   * not do: the user reads an empty badge as "nothing found", when the honest
+   * answer is that we did not look.
+   */
+  setState(findings: Finding[], composer: Composer | null, mode: Mode, truncated = false): void {
     const has = findings.length > 0
-    const blocked = mode === 'block' && has
-    this.indicator.classList.toggle('cx-alert', has && !blocked)
+    const blocked = mode === 'block' && (has || truncated)
+    this.indicator.classList.toggle('cx-alert', (has || truncated) && !blocked)
     this.indicator.classList.toggle('cx-blocked', blocked)
-    this.label.textContent = blocked ? '🔒 Blocked' : 'Contextia'
-    this.countEl.textContent = has ? String(findings.length) : ''
+    this.label.textContent = blocked ? '🔒 Blocked' : truncated && !has ? 'Too long to check' : 'Contextia'
+    this.countEl.textContent = has ? String(findings.length) : truncated ? '?' : ''
+    this.indicator.title = truncated
+      ? 'This message is longer than Contextia can scan. The end of it was not checked for secrets.'
+      : ''
     this.renderPopover(findings)
     this.drawHighlights(findings, composer)
-    if (!has) {
+    if (!has && !truncated) {
       this.hideTip()
       this.hideBanner()
     }

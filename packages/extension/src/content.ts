@@ -52,7 +52,7 @@ async function init(): Promise<void> {
     document.addEventListener('keydown', onKeydown, true)
     document.addEventListener('click', onSendClick, true)
     document.addEventListener('submit', onSubmit, true)
-    window.addEventListener('scroll', () => hud.setState(findings, composer, settings.mode), true)
+    window.addEventListener('scroll', () => hud.setState(findings, composer, settings.mode, scanTruncated), true)
     scan()
   }
   api.storage.onChanged.addListener((changes) => {
@@ -86,7 +86,7 @@ function scan(): void {
   const text = composer?.getText() ?? ''
   if (!text) scanTruncated = false
   findings = text ? scanText(text) : []
-  hud.setState(findings, composer, settings.mode)
+  hud.setState(findings, composer, settings.mode, scanTruncated)
   updateSendButton()
   if (findings.length) {
     logNew(findings)
@@ -222,7 +222,7 @@ function blockSubmit(e: Event): void {
   e.stopImmediatePropagation()
   void appendLog(findings.map((f) => entry(f, 'blocked')))
   for (const f of findings) report(f, 'block')
-  hud.setState(findings, composer, settings.mode)
+  hud.setState(findings, composer, settings.mode, scanTruncated)
   hud.flashBlocked(findings.length)
 }
 

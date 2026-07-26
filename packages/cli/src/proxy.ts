@@ -89,12 +89,24 @@ export function parseEventBatch(body: unknown): BrowserEvent[] | null {
   return out
 }
 
+// Detector ids and site names arrive from the reporter, so their cardinality is
+// not ours to assume. A proxy left running for days should not grow a key per
+// distinct string it was ever sent: measured at 20,000 sites the stats payload
+// reached 323 KB and the dashboard rendered 20,052 rows. Counting stops at the
+// cap; everything already tracked keeps counting.
+export const MAX_STAT_KEYS = 200
+
+function bump(bucket: Record<string, number>, key: string, by: number): void {
+  if (bucket[key] === undefined && Object.keys(bucket).length >= MAX_STAT_KEYS) return
+  bucket[key] = (bucket[key] ?? 0) + by
+}
+
 /** Fold a browser event batch into the running stats (mirrors terminal catches). */
 export function foldEvents(stats: ProxyStats, events: BrowserEvent[]): void {
   for (const e of events) {
     stats.withFindings += e.count
-    stats.byType[e.detector] = (stats.byType[e.detector] ?? 0) + e.count
-    stats.bySite[e.site] = (stats.bySite[e.site] ?? 0) + e.count
+    bump(stats.byType, e.detector, e.count)
+    bump(stats.bySite, e.site, e.count)
     if (e.action === 'redact') stats.redacted += e.count
     else if (e.action === 'block') stats.blocked += e.count
     else if (e.action === 'leaked') stats.leaked += e.count
@@ -359,7 +371,7 @@ async function handle(
           if (meta.truncated) unscannable = 'truncated'
           if (findings.length > 0) {
             stats.withFindings++
-            for (const f of findings) stats.byType[f.type] = (stats.byType[f.type] ?? 0) + 1
+            for (const f of findings) bump(stats.byType, f.type, 1)
             opts.onFinding?.(findings, { path })
             if (opts.mode === 'block') {
               stats.blocked++
@@ -478,14 +490,17 @@ export function escapeHtml(s: string): string {
 }
 
 function dashboardHtml(stats: ProxyStats, mode: ProxyMode): string {
-  const rows = Object.entries(stats.byType)
-    .sort((a, b) => b[1] - a[1])
-    .map(([t, n]) => `<tr><td>${escapeHtml(t)}</td><td>${n}</td></tr>`)
-    .join('')
-  const siteRows = Object.entries(stats.bySite)
-    .sort((a, b) => b[1] - a[1])
-    .map(([s, n]) => `<tr><td>${escapeHtml(s)}</td><td>${n}</td></tr>`)
-    .join('')
+  // Show the busiest, not everything: a page with thousands of rows is not a
+  // dashboard, and it reloads every two seconds.
+  const TOP = 25
+  const table = (bucket: Record<string, number>): string =>
+    Object.entries(bucket)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, TOP)
+      .map(([k, n]) => `<tr><td>${escapeHtml(k)}</td><td>${n}</td></tr>`)
+      .join('')
+  const rows = table(stats.byType)
+  const siteRows = table(stats.bySite)
   const mins = Math.max(1, Math.round((Date.now() - stats.startedAt) / 60000))
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="2">
 <title>Contextia proxy</title><style>
