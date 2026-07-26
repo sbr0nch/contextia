@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## v2.0.0
 
-Security and correctness pass. Three of these change observable behavior.
+Security and correctness pass. Two changes break existing setups, which is why
+this is a major: the proxy no longer answers on the network, and Block mode now
+refuses requests it used to forward. Read the first two entries before upgrading.
 
 - **The proxy now binds loopback only.** It previously listened on every
   interface, so the prompts passing through it and the stats dashboard were
