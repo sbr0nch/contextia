@@ -24,3 +24,26 @@ describe('svgNode', () => {
     expect(MARK_SVG).not.toContain('${')
   })
 })
+
+describe('svgNode namespace', () => {
+  // The regression this exists for: an SVG parsed as XML without an xmlns lands
+  // in no namespace. Size, children and querySelector all still behave, so the
+  // only symptom is that nothing is painted. Assert the namespace directly.
+  it('puts the mark in the SVG namespace, or it will not paint', () => {
+    const node = markNode()
+    expect(node.namespaceURI).toBe('http://www.w3.org/2000/svg')
+    for (const path of Array.from(node.querySelectorAll('path'))) {
+      expect(path.namespaceURI).toBe('http://www.w3.org/2000/svg')
+    }
+  })
+
+  it('adds the declaration when markup omits it', () => {
+    const node = svgNode('<svg viewBox="0 0 10 10"><circle r="4"/></svg>')
+    expect(node.namespaceURI).toBe('http://www.w3.org/2000/svg')
+    expect(node.querySelector('circle')?.namespaceURI).toBe('http://www.w3.org/2000/svg')
+  })
+
+  it('declares the namespace in the mark markup itself', () => {
+    expect(MARK_SVG).toContain('xmlns="http://www.w3.org/2000/svg"')
+  })
+})

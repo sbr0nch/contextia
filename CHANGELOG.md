@@ -1,5 +1,30 @@
 # Changelog
 
+## v2.0.2
+
+The 2.0.1 logo fix broke the logo. Parsing the mark as XML without an `xmlns`
+puts every element in no namespace, so the browser treats them as unknown tags
+and paints nothing. Size, child count and `querySelector` all still behave,
+which is why nothing caught it: the only symptom is an invisible mark in the
+popup, the options page and the in-page badge. `MARK_SVG` declares the namespace
+now, `svgNode()` adds it when markup omits it, and a test asserts `namespaceURI`
+rather than trusting geometry.
+
+- `npm run screenshots` regenerates the store screenshots from the current build
+  with Playwright. The old set was captured by hand once, never again, and had
+  drifted to a two-major-old UI and the previous logo. The demo page is
+  deliberately generic: a listing that mocks up a real chat product's interface
+  is misleading whatever the intent.
+- `contextia scan .` and `contextia scan src/` used to die on an EISDIR stack
+  trace and exit 0. That is the documented usage for pre-commit hooks and CI,
+  where exiting 0 on a crash reads as a clean scan. Directories are walked now,
+  skipping dependency and build trees, and an unreadable path exits 2.
+- `env_secret` matched 272 times across 3623 files of third-party code, every
+  one of them wrong: the pattern was written for `.env` lines but runs on any
+  text, so `nextToken = punctuator;` reads as KEY=value because the key contains
+  "token". A value ending in a statement terminator is code, and secret material
+  carries digits or base64 padding. Same corpus, 284 findings down to 13.
+
 ## v2.0.1
 
 Every surface now ships the same version number, including the ones that did not
