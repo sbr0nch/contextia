@@ -26,12 +26,37 @@ export function sortFindings(findings: Finding[]): Finding[] {
 
 // Bound the work per call; pasted text beyond this is not scanned. Keeps regex
 // cost predictable and is the ReDoS backstop together with linear-time patterns.
-const MAX_INPUT = 1_000_000
+// Callers MUST treat a truncated scan as "unknown", never as "clean": use
+// detectDetailed() and surface `truncated`, or fail closed.
+export const MAX_INPUT = 1_000_000
 
 function defaultRationale(severity: Finding['severity'], label: string): string {
   return severity === 'critical'
     ? `${label} looks like a live credential; sharing it with an AI assistant could leak access.`
     : `${label} may be sensitive; review before sending.`
+}
+
+/** A scan plus whether the input had to be truncated to stay inside MAX_INPUT. */
+export interface DetectResult {
+  findings: Finding[]
+  /** True when input exceeded MAX_INPUT: the tail was NOT scanned. */
+  truncated: boolean
+  /** How many characters were actually scanned. */
+  scannedLength: number
+}
+
+/**
+ * Scan and report coverage. Prefer this over `detect()` anywhere a miss matters:
+ * on a truncated input an empty `findings` means "nothing found in the part we
+ * read", not "the text is clean".
+ */
+export function detectDetailed(text: string, config: Config = {}): DetectResult {
+  const truncated = text.length > MAX_INPUT
+  return {
+    findings: detect(text, config),
+    truncated,
+    scannedLength: truncated ? MAX_INPUT : text.length,
+  }
 }
 
 export function detect(text: string, config: Config = {}): Finding[] {

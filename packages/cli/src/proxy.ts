@@ -1,12 +1,26 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http'
-import { detect, redact, customFindings, detectors, type Config, type Finding, type CustomRules } from '@sbr0nch/contextia-engine'
+import { gunzipSync, inflateSync, brotliDecompressSync } from 'node:zlib'
+import {
+  detectDetailed,
+  redact,
+  customFindings,
+  detectors,
+  type Config,
+  type Finding,
+  type CustomRules,
+} from '@sbr0nch/contextia-engine'
 
 export type ProxyMode = 'warn' | 'redact' | 'block'
 export type { CustomRules }
 
+/** Loopback only unless the operator opts out: the proxy carries plaintext prompts. */
+export const DEFAULT_HOST = '127.0.0.1'
+
 export interface ProxyOptions {
   port: number
   mode: ProxyMode
+  /** Interface to bind. Defaults to 127.0.0.1; anything else exposes the proxy. */
+  host?: string | undefined
   upstream?: string | undefined
   all?: boolean | undefined
   custom?: CustomRules | undefined
@@ -27,8 +41,17 @@ export interface ProxyStats {
   redacted: number
   blocked: number
   leaked: number
+  /** Bodies forwarded without being scanned (warn/redact only; block refuses). */
+  unscanned: number
   byType: Record<string, number>
   bySite: Record<string, number>
+}
+
+const UNSCANNABLE_DETAIL: Record<UnscannableReason, string> = {
+  oversize: 'larger than the 5 MB scan cap',
+  encoding: 'unsupported content-encoding',
+  unparsable: 'not JSON we understand',
+  truncated: 'longer than the engine scan cap, so the tail was not read',
 }
 
 /** A secret-free browser catch, reported to the local dashboard. Counts only. */
@@ -136,12 +159,16 @@ export function processPayload(
   custom?: CustomRules,
   vault?: Map<string, string>,
   signature?: boolean,
+  /** Set to true when any node exceeded the engine scan cap, so part went unread. */
+  meta?: { truncated: boolean },
 ): Finding[] {
   const findings: Finding[] = []
   let noted = false
   for (const node of textNodes(body)) {
     const text = node.get()
-    const found = [...detect(text, config), ...(custom ? customFindings(text, custom) : [])]
+    const scan = detectDetailed(text, config)
+    if (scan.truncated && meta) meta.truncated = true
+    const found = [...scan.findings, ...(custom ? customFindings(text, custom) : [])]
     if (found.length) {
       findings.push(...found)
       if (mode === 'redact') {
@@ -178,8 +205,43 @@ export function resolveUpstream(url: string, configured?: string): string {
   return 'https://api.anthropic.com'
 }
 
-const SKIP_REQUEST_HEADERS = new Set(['host', 'connection', 'content-length', 'accept-encoding'])
-const MAX_SCAN_BODY = 5 * 1024 * 1024 // bodies larger than this are forwarded unscanned
+// Hop-by-hop and framing headers must not be relayed. `expect` in particular:
+// clients such as curl add `Expect: 100-continue` for larger bodies, and passing
+// it through to fetch makes the upstream call fail outright.
+const SKIP_REQUEST_HEADERS = new Set([
+  'host',
+  'connection',
+  'content-length',
+  'accept-encoding',
+  'expect',
+  'transfer-encoding',
+  'keep-alive',
+  'upgrade',
+  'te',
+  'trailer',
+  'proxy-connection',
+])
+const MAX_SCAN_BODY = 5 * 1024 * 1024 // larger bodies cannot be scanned in one pass
+
+/** Why a body could not be inspected. Null means it was scanned normally. */
+export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable' | 'truncated'
+
+/**
+ * Decode a request body for scanning. Returns null when the encoding is one we
+ * cannot read, which must never be silently treated as "no secrets".
+ */
+export function decodeBody(body: Buffer, encoding?: string): Buffer | null {
+  const enc = (encoding ?? '').trim().toLowerCase()
+  try {
+    if (enc === '' || enc === 'identity') return body
+    if (enc === 'gzip' || enc === 'x-gzip') return gunzipSync(body)
+    if (enc === 'deflate') return inflateSync(body)
+    if (enc === 'br') return brotliDecompressSync(body)
+  } catch {
+    return null
+  }
+  return null
+}
 
 export function createProxyServer(opts: ProxyOptions): Server {
   const config = configFor(opts.all)
@@ -190,6 +252,7 @@ export function createProxyServer(opts: ProxyOptions): Server {
     redacted: 0,
     blocked: 0,
     leaked: 0,
+    unscanned: 0,
     byType: {},
     bySite: {},
   }
@@ -250,45 +313,89 @@ async function handle(
   stats.requests++
 
   const vault = opts.reversible && opts.mode === 'redact' ? new Map<string, string>() : undefined
+  const reqEncoding = req.headers['content-encoding']
+  let dropContentEncoding = false
+  let unscannable: UnscannableReason | null = null
 
-  if (body.length > MAX_SCAN_BODY) {
-    process.stderr.write(`contextia: request body ${body.length} B exceeds scan cap; forwarded unscanned\n`)
-  } else if ((req.method === 'POST' || req.method === 'PUT') && body.length > 0) {
-    try {
-      const json: unknown = JSON.parse(body.toString('utf8'))
-      const findings = processPayload(json, opts.mode, config, opts.custom, vault, opts.signature)
-      if (findings.length > 0) {
-        stats.withFindings++
-        for (const f of findings) stats.byType[f.type] = (stats.byType[f.type] ?? 0) + 1
-        opts.onFinding?.(findings, { path })
-        if (opts.mode === 'block') {
-          stats.blocked++
-          res.writeHead(403, { 'content-type': 'application/json' })
-          res.end(
-            JSON.stringify({
-              error: {
-                type: 'contextia_blocked',
-                message: `Blocked by Contextia: ${findings.length} secret(s) detected`,
-                secrets: [...new Set(findings.map((f) => f.type))],
-              },
-            }),
-          )
-          return
+  if ((req.method === 'POST' || req.method === 'PUT') && body.length > 0) {
+    if (body.length > MAX_SCAN_BODY) {
+      unscannable = 'oversize'
+    } else {
+      const decoded = decodeBody(body, Array.isArray(reqEncoding) ? reqEncoding[0] : reqEncoding)
+      if (decoded === null) {
+        unscannable = 'encoding'
+      } else {
+        let json: unknown
+        try {
+          json = JSON.parse(decoded.toString('utf8'))
+        } catch {
+          unscannable = 'unparsable'
         }
-        if (opts.mode === 'redact') {
-          stats.redacted++
-          body = Buffer.from(JSON.stringify(json))
+        if (!unscannable) {
+          const meta = { truncated: false }
+          const findings = processPayload(json, opts.mode, config, opts.custom, vault, opts.signature, meta)
+          if (meta.truncated) unscannable = 'truncated'
+          if (findings.length > 0) {
+            stats.withFindings++
+            for (const f of findings) stats.byType[f.type] = (stats.byType[f.type] ?? 0) + 1
+            opts.onFinding?.(findings, { path })
+            if (opts.mode === 'block') {
+              stats.blocked++
+              res.writeHead(403, { 'content-type': 'application/json' })
+              res.end(
+                JSON.stringify({
+                  error: {
+                    type: 'contextia_blocked',
+                    message: `Blocked by Contextia: ${findings.length} secret(s) detected`,
+                    secrets: [...new Set(findings.map((f) => f.type))],
+                  },
+                }),
+              )
+              return
+            }
+            if (opts.mode === 'redact') {
+              stats.redacted++
+              // The rewritten body is plain JSON: forward it decoded and drop the
+              // stale content-encoding rather than re-compressing.
+              body = Buffer.from(JSON.stringify(json))
+              dropContentEncoding = true
+            }
+          }
         }
       }
-    } catch {
-      // body isn't JSON we understand, so forward it unchanged
     }
+  }
+
+  // A body we could not read is unknown, not clean. Block mode must fail closed,
+  // otherwise its one promise is broken by anything gzipped or oversized.
+  if (unscannable) {
+    const detail = UNSCANNABLE_DETAIL[unscannable]
+    if (opts.mode === 'block') {
+      stats.blocked++
+      process.stderr.write(`contextia: blocked an unscannable request body (${detail})\n`)
+      res.writeHead(403, { 'content-type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          error: {
+            type: 'contextia_unscannable',
+            message: `Blocked by Contextia: request body could not be scanned (${detail}). Block mode fails closed.`,
+            reason: unscannable,
+          },
+        }),
+      )
+      return
+    }
+    stats.unscanned++
+    process.stderr.write(
+      `contextia: WARNING request body forwarded UNSCANNED (${detail}); secrets in it were not checked\n`,
+    )
   }
 
   const upstream = resolveUpstream(path, opts.upstream)
   const headers: Record<string, string> = {}
   for (const [k, v] of Object.entries(req.headers)) {
     if (v === undefined || SKIP_REQUEST_HEADERS.has(k.toLowerCase())) continue
+    if (dropContentEncoding && k.toLowerCase() === 'content-encoding') continue
     headers[k] = Array.isArray(v) ? v.join(', ') : v
   }
   headers['accept-encoding'] = 'identity'
@@ -330,14 +437,27 @@ async function handle(
 // Brand loading/live mark: the two masked dots pulsing between brackets.
 const SPINNER = `<svg viewBox="0 0 120 120" width="22" height="22" style="vertical-align:-4px;margin-right:8px"><g fill="none" stroke="#00D084" stroke-width="11" stroke-linecap="round"><path d="M40 30 C24 30 24 42 24 60 C24 78 24 90 40 90"/><path d="M80 30 C96 30 96 42 96 60 C96 78 96 90 80 90"/></g><circle cx="50" cy="60" r="7" fill="#00D084"><animate attributeName="opacity" values="1;.2;1" dur="1.1s" repeatCount="indefinite"/></circle><circle cx="70" cy="60" r="7" fill="#00D084"><animate attributeName="opacity" values="1;.2;1" dur="1.1s" begin="0.55s" repeatCount="indefinite"/></circle></svg>`
 
+/**
+ * Escape text interpolated into the dashboard. Detector and site labels arrive
+ * from the browser reporter, so they are untrusted input, not our own strings.
+ */
+export function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 function dashboardHtml(stats: ProxyStats, mode: ProxyMode): string {
   const rows = Object.entries(stats.byType)
     .sort((a, b) => b[1] - a[1])
-    .map(([t, n]) => `<tr><td>${t}</td><td>${n}</td></tr>`)
+    .map(([t, n]) => `<tr><td>${escapeHtml(t)}</td><td>${n}</td></tr>`)
     .join('')
   const siteRows = Object.entries(stats.bySite)
     .sort((a, b) => b[1] - a[1])
-    .map(([s, n]) => `<tr><td>${s}</td><td>${n}</td></tr>`)
+    .map(([s, n]) => `<tr><td>${escapeHtml(s)}</td><td>${n}</td></tr>`)
     .join('')
   const mins = Math.max(1, Math.round((Date.now() - stats.startedAt) / 60000))
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="2">
@@ -360,6 +480,7 @@ td:last-child{text-align:right;color:#00D084;font-variant-numeric:tabular-nums}
 <div class="card"><div class="n g">${stats.redacted}</div><div class="l">redacted</div></div>
 <div class="card"><div class="n r">${stats.blocked}</div><div class="l">blocked</div></div>
 <div class="card"><div class="n r">${stats.leaked}</div><div class="l">leaked</div></div>
+<div class="card"><div class="n r">${stats.unscanned}</div><div class="l">unscanned</div></div>
 </div>
 <table>${rows || '<tr><td class="l">no secrets seen yet</td><td></td></tr>'}</table>
 ${siteRows ? `<div class="sub" style="margin:22px 0 8px">by site (browser)</div><table>${siteRows}</table>` : ''}
@@ -368,12 +489,19 @@ ${siteRows ? `<div class="sub" style="margin:22px 0 8px">by site (browser)</div>
 
 export function startProxy(opts: ProxyOptions): Server {
   const server = createProxyServer(opts)
-  server.listen(opts.port, () => {
+  const host = opts.host ?? DEFAULT_HOST
+  server.listen(opts.port, host, () => {
     process.stderr.write(
       `contextia proxy: http://localhost:${opts.port} -> ${opts.upstream ?? 'auto (anthropic/openai)'}  mode=${opts.mode}\n` +
         `point your agent at it:  ANTHROPIC_BASE_URL=http://localhost:${opts.port}  (or OPENAI_BASE_URL)\n` +
         `live stats:              http://localhost:${opts.port}/__contextia\n`,
     )
+    if (host !== DEFAULT_HOST && host !== 'localhost') {
+      process.stderr.write(
+        `contextia: WARNING bound to ${host}, not loopback. Prompts and the stats\n` +
+          `dashboard are reachable from the network. Use the default unless you mean this.\n`,
+      )
+    }
   })
   return server
 }

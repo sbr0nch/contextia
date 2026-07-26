@@ -1,4 +1,4 @@
-import { detect, redact, customFindings, type Config, type Finding } from '@sbr0nch/contextia-engine'
+import { detectDetailed, redact, customFindings, type Config, type Finding } from '@sbr0nch/contextia-engine'
 import { findComposer, type Composer } from './composer.js'
 import { Hud } from './ui.js'
 import { api } from './api.js'
@@ -78,10 +78,12 @@ function effectiveConfig(): Config {
 function scan(): void {
   if (settings.mode === 'off') {
     findings = []
+    scanTruncated = false
     return
   }
   composer = findComposer()
   const text = composer?.getText() ?? ''
+  if (!text) scanTruncated = false
   findings = text ? scanText(text) : []
   hud.setState(findings, composer, settings.mode)
   updateSendButton()
@@ -91,10 +93,17 @@ function scan(): void {
   }
 }
 
+// True when the last scan hit the engine's input cap, so part of the composer
+// was never read. In Block mode that counts as unresolved: an unread tail is
+// unknown, not clean.
+let scanTruncated = false
+
 // Detected secrets plus the user's own "always redact" values. A custom match is
 // dropped if a detector already covers the same span, and if it's been allowed.
 function scanText(text: string): Finding[] {
-  const detected = detect(text, effectiveConfig())
+  const scan = detectDetailed(text, effectiveConfig())
+  scanTruncated = scan.truncated
+  const detected = scan.findings
   const custom = customFindings(text, settings.redactlist)
   if (custom.length === 0) return detected
   const covered = new Set(detected.map((f) => `${f.start}:${f.end}`))
@@ -107,7 +116,7 @@ function scanText(text: string): Finding[] {
 // In Block mode, dim the site's send button so it's clear why nothing happens.
 let dimmedButton: HTMLElement | null = null
 function updateSendButton(): void {
-  const shouldDim = settings.mode === 'block' && findings.length > 0
+  const shouldDim = settings.mode === 'block' && (findings.length > 0 || scanTruncated)
   if (!shouldDim) {
     if (dimmedButton) {
       restoreButton(dimmedButton)
@@ -148,6 +157,11 @@ function withSignature(text: string, count: number): string {
   return `[${count} ${s} ${SIGNATURE_MARK}, contextia.dev]\n${text}`
 }
 
+/** Block mode treats an unread tail as unresolved, even with nothing flagged. */
+function blockingOnTruncation(): boolean {
+  return settings.mode === 'block' && scanTruncated
+}
+
 function doRedact(action: LogAction): void {
   if (!composer || findings.length === 0) return
   const redacted = withSignature(redact(composer.getText(), findings), findings.length)
@@ -159,7 +173,7 @@ function doRedact(action: LogAction): void {
 }
 
 function onKeydown(e: KeyboardEvent): void {
-  if (findings.length === 0) return
+  if (findings.length === 0 && !blockingOnTruncation()) return
   if (e.key !== 'Enter' || e.shiftKey) return
   if (settings.mode === 'block') blockSubmit(e)
   else if (settings.mode === 'warn') markLeaked()
@@ -168,13 +182,14 @@ function onKeydown(e: KeyboardEvent): void {
 // Block mode stops a click on the send button; warn mode lets it through but
 // records that the flagged secret was sent anyway.
 function onSendClick(e: MouseEvent): void {
-  if (findings.length === 0 || !isSendTarget(e.target)) return
+  if (findings.length === 0 && !blockingOnTruncation()) return
+  if (!isSendTarget(e.target)) return
   if (settings.mode === 'block') blockSubmit(e)
   else if (settings.mode === 'warn') markLeaked()
 }
 
 function onSubmit(e: Event): void {
-  if (findings.length === 0) return
+  if (findings.length === 0 && !blockingOnTruncation()) return
   if (settings.mode === 'block') blockSubmit(e)
   else if (settings.mode === 'warn') markLeaked()
 }

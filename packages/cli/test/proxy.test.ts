@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { createServer, type Server } from 'node:http'
+import { createServer, request, type Server } from 'node:http'
+import { gzipSync, gunzipSync } from 'node:zlib'
 import type { AddressInfo } from 'node:net'
 import {
   textNodes,
@@ -216,5 +217,171 @@ describe('proxy server (against a mock upstream)', () => {
       expect(res.status).toBe(200)
       expect(received.body).toContain('just a normal question')
     })
+  })
+})
+
+// Regression cover for the fail-open paths: a body the proxy cannot read is
+// unknown, not clean, and block mode must refuse it rather than forward it.
+describe('unscannable bodies', () => {
+  let upstream: Server
+  let upstreamPort: number
+  let received: { body?: string; encoding?: string | undefined }
+
+  beforeAll(async () => {
+    upstream = createServer(async (req, res) => {
+      const chunks: Buffer[] = []
+      for await (const c of req) chunks.push(c as Buffer)
+      let buf = Buffer.concat(chunks)
+      if (req.headers['content-encoding'] === 'gzip') {
+        try {
+          buf = gunzipSync(buf)
+        } catch {
+          /* leave as-is */
+        }
+      }
+      received = { body: buf.toString('utf8'), encoding: req.headers['content-encoding'] as string | undefined }
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ok: true }))
+    })
+    upstreamPort = await listen(upstream)
+  })
+  afterAll(async () => close(upstream))
+
+  async function withProxy(mode: ProxyMode, fn: (port: number) => Promise<void>): Promise<void> {
+    received = {}
+    const proxy = createProxyServer({ port: 0, mode, upstream: `http://localhost:${upstreamPort}` })
+    const port = await listen(proxy)
+    try {
+      await fn(port)
+    } finally {
+      await close(proxy)
+    }
+  }
+
+  const gzBody = (content: string): Buffer => gzipSync(Buffer.from(SECRET_BODY(content)))
+
+  it('decodes a gzip body and still redacts the secret', async () => {
+    await withProxy('redact', async (port) => {
+      const res = await fetch(`http://localhost:${port}/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-encoding': 'gzip' },
+        body: gzBody('deploy AKIAIOSFODNN7EXAMPLE now'),
+      })
+      expect(res.status).toBe(200)
+      expect(received.body).toContain('⟨redacted:aws_access_key_id⟩')
+      expect(received.body).not.toContain('AKIAIOSFODNN7EXAMPLE')
+      expect(received.encoding).toBeUndefined() // rewritten body is sent decoded
+    })
+  })
+
+  it('block mode refuses a gzip body carrying a secret', async () => {
+    await withProxy('block', async (port) => {
+      const res = await fetch(`http://localhost:${port}/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-encoding': 'gzip' },
+        body: gzBody('AKIAIOSFODNN7EXAMPLE'),
+      })
+      expect(res.status).toBe(403)
+      expect(received.body).toBeUndefined() // never reached upstream
+    })
+  })
+
+  it('block mode fails closed on an encoding it cannot decode', async () => {
+    await withProxy('block', async (port) => {
+      const res = await fetch(`http://localhost:${port}/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-encoding': 'weird-codec' },
+        body: SECRET_BODY('AKIAIOSFODNN7EXAMPLE'),
+      })
+      expect(res.status).toBe(403)
+      expect((await res.json()).error.type).toBe('contextia_unscannable')
+      expect(received.body).toBeUndefined()
+    })
+  })
+
+  it('block mode fails closed on a body that is not JSON', async () => {
+    await withProxy('block', async (port) => {
+      const res = await fetch(`http://localhost:${port}/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: 'AKIAIOSFODNN7EXAMPLE not json at all',
+      })
+      expect(res.status).toBe(403)
+      expect((await res.json()).error.reason).toBe('unparsable')
+      expect(received.body).toBeUndefined()
+    })
+  })
+
+  it('warn mode forwards an unscannable body but counts it as unscanned', async () => {
+    received = {}
+    const proxy = createProxyServer({ port: 0, mode: 'warn', upstream: `http://localhost:${upstreamPort}` })
+    const port = await listen(proxy)
+    try {
+      const res = await fetch(`http://localhost:${port}/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: 'plain text, not json',
+      })
+      expect(res.status).toBe(200)
+      const stats = (await (await fetch(`http://localhost:${port}/__contextia/stats`)).json()) as ProxyStats
+      expect(stats.unscanned).toBe(1)
+    } finally {
+      await close(proxy)
+    }
+  })
+
+  it('strips Expect: 100-continue instead of failing the upstream call', async () => {
+    // fetch() refuses to send this header, so drive the proxy with a raw client.
+    // Undici throws NotSupportedError on it, which is exactly why relaying the
+    // header upstream used to turn every such request into a 502.
+    await withProxy('warn', async (port) => {
+      const payload = SECRET_BODY('hello')
+      const status = await new Promise<number>((resolve, reject) => {
+        const req = request(
+          {
+            host: '127.0.0.1',
+            port,
+            path: '/v1/messages',
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'content-length': Buffer.byteLength(payload),
+              expect: '100-continue',
+            },
+          },
+          (res) => {
+            res.resume()
+            res.on('end', () => resolve(res.statusCode ?? 0))
+          },
+        )
+        req.on('error', reject)
+        req.end(payload)
+      })
+      expect(status).toBe(200) // used to be 502: the header reached fetch
+      expect(received.body).toContain('hello')
+    })
+  })
+})
+
+describe('dashboard escaping', () => {
+  it('escapes reporter-supplied labels instead of emitting them as markup', async () => {
+    const proxy = createProxyServer({ port: 0, mode: 'warn' })
+    const port = await listen(proxy)
+    try {
+      await fetch(`http://localhost:${port}/__contextia/events`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          events: [
+            { ts: 't', site: '<img src=x onerror=alert(1)>', detector: 'aws', action: 'warn', count: 1 },
+          ],
+        }),
+      })
+      const html = await (await fetch(`http://localhost:${port}/__contextia`)).text()
+      expect(html).not.toContain('<img src=x onerror=alert(1)>')
+      expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;')
+    } finally {
+      await close(proxy)
+    }
   })
 })

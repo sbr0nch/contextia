@@ -75,3 +75,22 @@ describe('sortFindings tie-breakers', () => {
     ])
   })
 })
+
+describe('scan coverage on oversized input', () => {
+  it('reports truncation so an empty result is not read as clean', async () => {
+    const { detectDetailed, MAX_INPUT } = await import('../src/detect.js')
+    const tail = 'AKIAIOSFODNN7EXAMPLE'
+    const oversized = 'a'.repeat(MAX_INPUT) + ' ' + tail
+    const res = detectDetailed(oversized)
+    expect(res.truncated).toBe(true)
+    expect(res.scannedLength).toBe(MAX_INPUT)
+    expect(res.findings).toHaveLength(0) // the secret is past the cap, genuinely unread
+  })
+
+  it('reports full coverage for input inside the cap', async () => {
+    const { detectDetailed } = await import('../src/detect.js')
+    const res = detectDetailed('key AKIAIOSFODNN7EXAMPLE')
+    expect(res.truncated).toBe(false)
+    expect(res.findings.length).toBeGreaterThan(0)
+  })
+})

@@ -4,7 +4,7 @@
 // detection engine is bundled in ../vendor/engine.js, so this needs only Node,
 // no separately installed CLI, and nothing is sent anywhere.
 import { readFileSync } from 'node:fs'
-import { detect } from '../vendor/engine.js'
+import { detectDetailed } from '../vendor/engine.js'
 
 function readStdin() {
   try {
@@ -38,14 +38,33 @@ try {
   // stdin wasn't JSON, so scan it as-is
 }
 
-const findings = detect(prompt, loadConfig())
-if (findings.length === 0) process.exit(0)
+const scan = detectDetailed(prompt, loadConfig())
 
-const types = [...new Set(findings.map((f) => f.type))].join(', ')
+// A prompt too long to scan in full is unknown, not clean. This hook exists to
+// block, so it fails closed rather than waving through the part it never read.
+if (scan.truncated && scan.findings.length === 0) {
+  process.stdout.write(
+    JSON.stringify({
+      decision: 'block',
+      reason:
+        `Contextia blocked this prompt: it is ${prompt.length} characters and only the first ` +
+        `${scan.scannedLength} could be scanned, so the rest was never checked for secrets. ` +
+        `Send it in smaller pieces.`,
+    }),
+  )
+  process.exit(0)
+}
+
+if (scan.findings.length === 0) process.exit(0)
+
+const types = [...new Set(scan.findings.map((f) => f.type))].join(', ')
+const tail = scan.truncated
+  ? ` (only the first ${scan.scannedLength} of ${prompt.length} characters could be scanned)`
+  : ''
 process.stdout.write(
   JSON.stringify({
     decision: 'block',
-    reason: `Contextia blocked this prompt: it contains ${types}. Remove the secret before sending; its value must not reach the model.`,
+    reason: `Contextia blocked this prompt: it contains ${types}${tail}. Remove the secret before sending; its value must not reach the model.`,
   }),
 )
 process.exit(0)

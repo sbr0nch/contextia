@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+Security and correctness pass. Three of these change observable behavior.
+
+- **The proxy now binds loopback only.** It previously listened on every
+  interface, so the prompts passing through it and the stats dashboard were
+  reachable from the local network. Use `--host` to opt out deliberately; doing
+  so prints a warning.
+- **Block mode fails closed.** A request body the proxy cannot read is unknown,
+  not clean, and is now refused with `contextia_unscannable` instead of being
+  forwarded. This covers gzip/deflate/br bodies (previously passed through
+  unscanned, secrets and all), bodies over the 5 MB cap, bodies that are not
+  JSON, and text longer than the engine scan cap. Warn and redact modes still
+  forward, but log a warning and count the request in a new `unscanned` stat.
+- **Compressed request bodies are decoded before scanning**, so a gzipped prompt
+  is redacted like any other instead of slipping through.
+- **The Claude Code plugin hook fails closed** on a prompt too long to scan in
+  full, rather than allowing the part it never read.
+- Overlapping findings now redact the union of their spans. A short warning
+  overlapping a longer critical used to suppress it and leave the rest of the
+  secret in clear.
+- `detectDetailed()` reports whether input hit the scan cap, so an empty result
+  is no longer indistinguishable from a clean scan. The CLI warns on truncation;
+  the extension treats a truncated scan as unresolved in Block mode.
+- `Expect: 100-continue` is no longer relayed upstream. Clients that send it
+  (curl does, above 1 KB) previously got a 502 from every request.
+- The stats dashboard escapes detector and site labels, which arrive from the
+  browser reporter and were rendered as markup.
+
 ## v1.3.0
 
 - Optional **local stats endpoint**: the browser extension can mirror catch

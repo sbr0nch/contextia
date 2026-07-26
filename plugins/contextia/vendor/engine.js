@@ -1353,6 +1353,14 @@ var MAX_INPUT = 1e6;
 function defaultRationale(severity, label) {
   return severity === "critical" ? `${label} looks like a live credential; sharing it with an AI assistant could leak access.` : `${label} may be sensitive; review before sending.`;
 }
+function detectDetailed(text, config = {}) {
+  const truncated = text.length > MAX_INPUT;
+  return {
+    findings: detect(text, config),
+    truncated,
+    scannedLength: truncated ? MAX_INPUT : text.length
+  };
+}
 function detect(text, config = {}) {
   const scanned = text.length > MAX_INPUT ? text.slice(0, MAX_INPUT) : text;
   const enabled = resolveEnabled(config);
@@ -1380,26 +1388,35 @@ function detect(text, config = {}) {
 
 // packages/engine/src/redact.ts
 var severityRank = { critical: 0, warning: 1 };
-function resolveOverlaps(findings) {
+function representative(a, b) {
+  if (severityRank[a.severity] !== severityRank[b.severity]) {
+    return severityRank[a.severity] < severityRank[b.severity] ? a : b;
+  }
+  return b.end - b.start > a.end - a.start ? b : a;
+}
+function clusterOverlaps(findings) {
   const ordered = [...findings].sort(
     (a, b) => a.start - b.start || severityRank[a.severity] - severityRank[b.severity] || b.end - a.end
   );
-  const kept = [];
-  let lastEnd = -1;
+  const out = [];
   for (const f of ordered) {
-    if (f.start < lastEnd) continue;
-    kept.push(f);
-    lastEnd = f.end;
+    const last = out[out.length - 1];
+    if (last && f.start < last.end) {
+      last.end = Math.max(last.end, f.end);
+      last.pick = representative(last.pick, f);
+      continue;
+    }
+    out.push({ start: f.start, end: f.end, pick: f });
   }
-  return kept;
+  return out;
 }
 function redact(text, findings, opts = {}) {
   const tokenFor = opts.token ?? ((f) => `\u27E8redacted:${f.type}\u27E9`);
   let result = "";
   let cursor = 0;
-  for (const f of resolveOverlaps(findings)) {
-    result += text.slice(cursor, f.start) + tokenFor(f);
-    cursor = f.end;
+  for (const c of clusterOverlaps(findings)) {
+    result += text.slice(cursor, c.start) + tokenFor(c.pick);
+    cursor = c.end;
   }
   return result + text.slice(cursor);
 }
@@ -1436,8 +1453,10 @@ function customFindings(text, rules) {
   return out;
 }
 export {
+  MAX_INPUT,
   customFindings,
   detect,
+  detectDetailed,
   detectors,
   detectorsById,
   redact

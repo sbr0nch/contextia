@@ -21,6 +21,8 @@ Useful things to report:
   a pattern that is so noisy it is unusable (false positive).
 - Any way the **browser extension** makes a network request. It must make
   **none**. This is covered by tests; a regression is a security bug.
+- Any way the proxy or the plugin hook can be made to pass a payload through
+  unscanned while reporting it as clean (fail-open). Block mode must fail closed.
 - Any way a matched secret value gets persisted (logs, storage). Only the
   detector type, severity, site, action and timestamp may be stored.
 - A way the **proxy** forwards a secret upstream in redact/block mode.

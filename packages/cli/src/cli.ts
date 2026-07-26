@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import type { AddressInfo } from 'node:net'
-import { detect, redact, detectors, type Finding } from '@sbr0nch/contextia-engine'
+import { detectDetailed, redact, detectors, type Finding } from '@sbr0nch/contextia-engine'
 import { configFor, locate, maskValue, type ScanOptions } from './core.js'
 import { startProxy, createProxyServer, type ProxyMode, type CustomRules } from './proxy.js'
 
@@ -43,7 +43,14 @@ function cmdScan(): void {
   const rows: Array<Record<string, unknown>> = []
   let total = 0
   for (const { name, text } of inputs()) {
-    for (const f of locate(text, detect(text, config))) {
+    const scan = detectDetailed(text, config)
+    if (scan.truncated) {
+      process.stderr.write(
+        `contextia: WARNING ${name} is ${text.length} chars; only the first ${scan.scannedLength} were scanned. ` +
+          `The rest was NOT checked.\n`,
+      )
+    }
+    for (const f of locate(text, scan.findings)) {
       total++
       if (json) {
         rows.push({ file: name, line: f.line, col: f.col, type: f.type, severity: f.severity, preview: maskValue(f.match), rationale: f.rationale })
@@ -62,7 +69,16 @@ function cmdScan(): void {
 
 function cmdRedact(): void {
   const config = configFor(opts)
-  for (const { text } of inputs()) process.stdout.write(redact(text, detect(text, config)))
+  for (const { name, text } of inputs()) {
+    const scan = detectDetailed(text, config)
+    if (scan.truncated) {
+      process.stderr.write(
+        `contextia: WARNING ${name} is ${text.length} chars; only the first ${scan.scannedLength} were scanned, ` +
+          `so the output past that point is NOT redacted.\n`,
+      )
+    }
+    process.stdout.write(redact(text, scan.findings))
+  }
 }
 
 function validMode(mode: string): mode is ProxyMode {
@@ -99,6 +115,7 @@ function cmdProxy(): void {
   startProxy({
     port: Number(flagValue('--port') ?? '8787'),
     mode,
+    host: flagValue('--host'),
     upstream: flagValue('--upstream'),
     all: flags.has('--all'),
     custom: parseCustom(flagValue('--redact-file')),
@@ -209,6 +226,9 @@ Options:
   --explain            (scan) print why each match was flagged
   --mode <m>           (proxy) warn | redact | block        (default: redact)
   --port <n>           (proxy) listen port                  (default: 8787)
+  --host <h>           (proxy) interface to bind            (default: 127.0.0.1)
+                       Loopback by default. Any other value exposes your prompts
+                       and the stats dashboard to the network.
   --upstream <url>     (proxy) force upstream API base URL  (default: auto)
   --redact-file <p>    (proxy) JSON { "values": [], "patterns": [] } of your own
                        data to always redact, on top of detected secrets
