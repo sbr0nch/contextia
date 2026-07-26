@@ -94,3 +94,20 @@ describe('scan coverage on oversized input', () => {
     expect(res.findings.length).toBeGreaterThan(0)
   })
 })
+
+describe('malformed allowlist patterns', () => {
+  it('skips an invalid pattern instead of throwing on every scan', async () => {
+    const { detect } = await import('../src/detect.js')
+    const text = 'key AKIAIOSFODNN7EXAMPLE'
+    // '[unclosed' is not a valid regex; a user can type it into settings.
+    expect(() => detect(text, { allowlist: { patterns: ['[unclosed'] } })).not.toThrow()
+    expect(detect(text, { allowlist: { patterns: ['[unclosed'] } }).length).toBeGreaterThan(0)
+  })
+
+  it('still honours the valid patterns alongside a broken one', async () => {
+    const { detect } = await import('../src/detect.js')
+    const text = 'key AKIAIOSFODNN7EXAMPLE'
+    const found = detect(text, { allowlist: { patterns: ['[bad', '^AKIA'] } })
+    expect(found.filter((f) => f.type === 'aws_access_key_id')).toHaveLength(0)
+  })
+})

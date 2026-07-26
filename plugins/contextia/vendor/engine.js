@@ -1341,7 +1341,14 @@ function resolveEnabled(config) {
 function compileAllowlist(config) {
   const allow = config.allowlist;
   const values = new Set(allow?.values ?? []);
-  const patterns = (allow?.patterns ?? []).map((p) => new RegExp(p));
+  const patterns = [];
+  for (const p of allow?.patterns ?? []) {
+    try {
+      patterns.push(new RegExp(p));
+    } catch {
+      continue;
+    }
+  }
   return (match) => values.has(match) || patterns.some((re) => re.test(match));
 }
 function sortFindings(findings) {

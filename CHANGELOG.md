@@ -26,6 +26,9 @@ Security and correctness pass. Three of these change observable behavior.
   the extension treats a truncated scan as unresolved in Block mode.
 - `Expect: 100-continue` is no longer relayed upstream. Clients that send it
   (curl does, above 1 KB) previously got a 502 from every request.
+- An invalid allowlist pattern no longer throws on every scan. Allowlist
+  patterns are typed by the user in settings, so one stray bracket used to
+  break detection entirely; bad patterns are skipped and the rest still apply.
 - The stats dashboard escapes detector and site labels, which arrive from the
   browser reporter and were rendered as markup.
 
