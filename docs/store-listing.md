@@ -13,6 +13,12 @@ Catch API keys, tokens, credentials before you paste them into ChatGPT or Claude
 Developer Tools
 
 ## Detailed description
+
+> Do not list vendor or brand names here. The Chrome Web Store rejected v0.1.0
+> under Yellow Argon (Spam and Placement) for "excessive keywords in the item's
+> description", citing the roster of credential providers. Describe categories,
+> not brands. The full detector list belongs in the repository.
+
 Contextia is a local, privacy-first guard that flags secrets in the chat composer
 before they ever leave your machine.
 
@@ -21,31 +27,37 @@ contain live API keys, tokens, private keys and connection strings. Contextia
 catches them at the moment of typing or pasting, entirely on your device.
 
 What it does:
-• Detects 50+ credential types: AWS, GitHub, GitLab, Stripe, Slack, OpenAI,
-  Anthropic, Google, Azure, Twilio, SendGrid, Figma, Atlassian and more, plus
-  PEM private keys, .env secrets, database connection strings, JWTs, and personal
-  data like Luhn-valid credit-card numbers and IBANs.
-• Explains why each match was flagged, so it's never a mystery.
-• Underlines the offending text and shows a popover: Redact, Allow once, Allow
-  all, or Allow this pattern always.
-• Add your own data to always redact (custom values and regex patterns).
-• Modes: Warn, Auto-redact before sending, Block until resolved, or Off.
-• A local detections log and stats, stored on your device, never the secret value.
+• Detects over 80 kinds of credential, covering cloud provider keys, source
+  control and package registry tokens, payment and messaging service keys, AI
+  provider keys, PEM private keys, .env secrets, database connection strings
+  and JWTs.
+• Optionally flags personal data as well: card numbers validated by checksum,
+  IBANs and national identifiers. Off unless you turn them on.
+• Explains why each match was flagged, so it is never a mystery.
+• Underlines the offending text and offers Redact, Allow once, Allow all, or
+  Allow this pattern always.
+• Lets you add your own values and regular expressions to always redact.
+• Four modes: Warn, Auto-redact before sending, Block until resolved, or Off.
+• Keeps a local detections log and counters on your device. Never the secret
+  value itself.
 
 Privacy by construction:
-• Nothing leaves your machine. No accounts, no servers, no telemetry, no third parties.
-• Zero network by default. Optionally, you can mirror catch counts (never the secret)
-  to a local loopback dashboard on your own device. It is off unless you enable it,
-  and it refuses any non-loopback address.
-• Runs only on supported AI chat sites (ChatGPT, Claude, Gemini, Copilot, Perplexity, DeepSeek). Requests no other access.
-• Open source (MIT). Audit every line: https://github.com/sbr0nch/contextia
+• Nothing leaves your machine. No accounts, no servers, no telemetry, no third
+  parties.
+• Zero network requests by default. You may optionally mirror catch counts,
+  never the secret, to a dashboard on your own machine over loopback. It is off
+  unless you enable it and refuses any address that is not loopback.
+• Runs only on the AI chat sites listed in the permissions, and requests no
+  other access.
+• Open source under the MIT licence. Audit every line:
+  https://github.com/sbr0nch/contextia
 
 Contextia is a safety net, not a guarantee: rule-based detection can miss things,
 so treat it as a guardrail, not proof that a paste is clean.
 
 ## Single purpose (required field)
 Detect secrets in the AI chat composer and let the user redact, allow, or block
-them before submitting, entirely on-device.
+them before they are submitted. All processing is local to the device.
 
 ## Permission justifications (required)
 - storage: persist the user's settings, allow/redact lists, and a local detections
@@ -67,9 +79,10 @@ them before submitting, entirely on-device.
   and only if the user enables it. No analytics, no tracking, no third parties.
 
 ## Privacy policy URL
-Use either:
-- https://github.com/sbr0nch/contextia/blob/main/PRIVACY.md  (works immediately)
-- https://contextia.dev/privacy  (once the site hosts it)
+https://github.com/sbr0nch/contextia/blob/main/PRIVACY.md
+
+Do not use https://contextia.dev/privacy until that page actually exists. It
+returns 404 today, and a store will reject an unreachable privacy policy.
 
 ## Assets to upload
 - Icon: 128×128 (packages/extension/public/icons/icon-128.png)
