@@ -2,7 +2,7 @@ import type { Finding } from '@sbr0nch/contextia-engine'
 import type { Composer } from './composer.js'
 import type { Mode } from './storage.js'
 import { mask } from './mask.js'
-import { MARK_SVG } from './brand.js'
+import { markNode } from './brand.js'
 
 export interface UIHandlers {
   onRedactAll: () => void
@@ -141,7 +141,7 @@ export class Hud {
     this.overlay = el('div', 'cx-overlay')
     this.indicator = el('div', 'cx-indicator glass')
     const mark = el('span', 'cx-mark')
-    mark.innerHTML = MARK_SVG
+    mark.replaceChildren(markNode())
     this.label = el('span', '', 'Contextia')
     this.countEl = el('span', 'cx-count')
     this.indicator.append(mark, this.label, this.countEl)
@@ -198,7 +198,7 @@ export class Hud {
     if (findings.length === 0) {
       const wrap = el('div', 'cx-empty')
       const mk = el('span', 'cx-emark')
-      mk.innerHTML = MARK_SVG
+      mk.replaceChildren(markNode())
       const txt = el('div')
       txt.append(el('div', 'cx-empty-t', 'No secrets detected'), el('div', 'cx-empty-s', 'Contextia is watching this message.'))
       wrap.append(mk, txt)

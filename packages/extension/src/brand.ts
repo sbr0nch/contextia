@@ -8,3 +8,22 @@ export const MARK_SVG =
   '<path d="M490.038 440.695C497.361 439.6 504.198 444.613 505.355 451.927C506.512 459.24 501.556 466.119 494.253 467.337C486.862 468.57 479.883 463.542 478.713 456.141C477.542 448.741 482.628 441.804 490.038 440.695Z"/>' +
   '<path d="M528.925 440.668C536.17 438.969 543.416 443.479 545.091 450.73C546.766 457.98 542.232 465.212 534.976 466.863C527.754 468.506 520.563 463.997 518.896 456.781C517.229 449.564 521.714 442.358 528.925 440.668Z"/>' +
   '</svg>'
+
+/**
+ * Parse trusted SVG markup into a real DOM node.
+ *
+ * The markup handed to this is always a constant defined in source, with
+ * nothing interpolated, so writing it to innerHTML was never a vulnerability.
+ * Reviewers flag every innerHTML write regardless, and an extension whose whole
+ * pitch is caution should not be the one arguing about it. DOMParser on
+ * image/svg+xml does not execute script.
+ */
+export function svgNode(markup: string): SVGElement {
+  const doc = new DOMParser().parseFromString(markup, 'image/svg+xml')
+  return doc.documentElement as unknown as SVGElement
+}
+
+/** The Contextia mark, ready to append. */
+export function markNode(): SVGElement {
+  return svgNode(MARK_SVG)
+}

@@ -1,6 +1,6 @@
 import { getSettings, setSettings, getStats, getLog, clearAll, type Mode } from './storage.js'
 import { api } from './api.js'
-import { MARK_SVG } from './brand.js'
+import { markNode, svgNode } from './brand.js'
 
 const MODE_LABELS: Record<Mode, string> = {
   warn: 'Warn: flag, let me decide',
@@ -33,7 +33,10 @@ const SPINNER = `<svg viewBox="0 0 120 120" width="34" height="34"><g fill="none
 async function render(): Promise<void> {
   const app = document.getElementById('app')
   if (app && !app.hasChildNodes()) {
-    app.innerHTML = `<div style="display:flex;justify-content:center;padding:44px 0">${SPINNER}</div>`
+    const wrap = document.createElement('div')
+    wrap.style.cssText = 'display:flex;justify-content:center;padding:44px 0'
+    wrap.append(svgNode(SPINNER))
+    app.replaceChildren(wrap)
   }
   const [settings, stats, log] = await Promise.all([getSettings(), getStats(), getLog()])
   if (!app) return
@@ -41,7 +44,7 @@ async function render(): Promise<void> {
 
   const brand = el('div', 'cx-brand')
   const mark = el('span', 'cx-mark')
-  mark.innerHTML = MARK_SVG
+  mark.replaceChildren(markNode())
   brand.append(mark, el('span', '', 'Contextia'))
 
   const headline = el('div', 'cx-headline')

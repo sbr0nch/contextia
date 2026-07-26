@@ -8,7 +8,7 @@ import {
   type Mode,
   type Settings,
 } from './storage.js'
-import { MARK_SVG } from './brand.js'
+import { markNode } from './brand.js'
 import { isLoopbackUrl, DEFAULT_STATS_URL } from './reporter.js'
 import { api } from './api.js'
 
@@ -303,7 +303,7 @@ async function render(): Promise<void> {
 
   const brand = el('div', 'cx-brand')
   const mark = el('span', 'cx-mark')
-  mark.innerHTML = MARK_SVG
+  mark.replaceChildren(markNode())
   brand.append(mark, el('span', '', 'Contextia'))
   app.append(brand)
 

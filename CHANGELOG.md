@@ -1,5 +1,14 @@
 # Changelog
 
+## Extension v2.0.1
+
+- The popup, options page and in-page badge built their SVG by assigning a
+  constant to `innerHTML`. Nothing was ever interpolated into that markup, so it
+  was not exploitable, but AMO and the Chrome Web Store flag every `innerHTML`
+  write and an extension that sells caution should not be arguing the point.
+  They now parse the markup once with `DOMParser` and append a real node.
+  No behaviour change. Extension only; the CLI and engine stay at 2.0.0.
+
 ## v2.0.0
 
 Security and correctness pass. Two changes break existing setups, which is why
