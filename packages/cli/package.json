@@ -1,0 +1,42 @@
+{
+  "name": "@sbr0nch/contextia",
+  "version": "1.3.0",
+  "description": "Contextia secret detection for the terminal.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "contextia": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@sbr0nch/contextia-engine": "*",
+    "@types/node": "^20.19.43",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  },
+  "keywords": [
+    "secrets",
+    "dlp",
+    "ai",
+    "security",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sbr0nch/contextia.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/sbr0nch/contextia/tree/main/packages/cli#readme",
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "name": "@sbr0nch/contextia-engine",
+  "version": "1.3.0",
+  "description": "Environment-agnostic secret detection engine. No DOM, no network, dependency-light.",
+  "keywords": [
+    "secrets",
+    "secret-detection",
+    "dlp",
+    "security",
+    "api-keys",
+    "redaction",
+    "credentials"
+  ],
+  "homepage": "https://github.com/sbr0nch/contextia/tree/main/packages/engine#readme",
+  "bugs": "https://github.com/sbr0nch/contextia/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sbr0nch/contextia.git",
+    "directory": "packages/engine"
+  },
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "acceptance": "vitest run --config vitest.acceptance.config.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "npm run build",
+    "gen": "node scripts/generate-detectors.mjs"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.9",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  }
+}

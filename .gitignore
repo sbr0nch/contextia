@@ -1,0 +1,45 @@
+# --- Local build scaffolding: NEVER commit (see CLAUDE.md) ---
+CLAUDE.md
+SPEC.md
+SPEC.*.md
+PROMPT.md
+PROMPT.*.md
+/loop/
+/.claude/
+/.ralph/
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+.build-number
+
+# Test / coverage
+coverage/
+*.lcov
+
+# Extension package
+*.zip
+*.crx
+*.pem
+
+# e2e screenshot output
+shots/
+
+# Env / secrets
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# Firefox build output
+dist-firefox/
