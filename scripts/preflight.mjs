@@ -57,12 +57,16 @@ if (bundles.length === 0) {
 }
 
 // --- the repo deliberately carries no em or en dashes ----------------------
+// Written as escapes on purpose: spelling the characters out here would make
+// this file trip its own check, which is exactly what happened the first time.
+const EM_DASH = '\u2014'
+const EN_DASH = '\u2013'
 const tracked = execSync('git ls-files', { encoding: 'utf8' }).split('\n').filter(Boolean)
 const dashed = tracked.filter((f) => {
   if (/\.(png|jpg|jpeg|gif|zip|xpi|crx|woff2?)$/i.test(f)) return false
   try {
     const t = read(f)
-    return t.includes('—') || t.includes('–')
+    return t.includes(EM_DASH) || t.includes(EN_DASH)
   } catch {
     return false
   }
