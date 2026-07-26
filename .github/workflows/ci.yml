@@ -16,3 +16,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+
+      # The documented commands, run as written. Three defects have come from
+      # the docs promising something the CLI did not do.
+      - run: npm run test:docs
+
+      # The content script against the DOM shapes the supported sites use.
+      # Needs a real browser: the failure this guards against is invisible to
+      # a simulated DOM, which agreed with the implementation about what a
+      # composer looks like while multi-line prompts went unscanned.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:dom

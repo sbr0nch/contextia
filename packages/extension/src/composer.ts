@@ -72,12 +72,31 @@ export function findComposer(root: ParentNode = document): Composer | null {
   return null
 }
 
+/**
+ * Read a contenteditable the way the user sees it.
+ *
+ * Not `textContent`: it concatenates block elements with no separator at all, so
+ * a prompt spread over paragraphs comes back as one unbroken run of characters
+ * and a secret sitting at a block boundary stops matching. Every editor on the
+ * supported sites is block-based (ProseMirror, Lexical, Quill), so a multi-line
+ * prompt is the normal case rather than an edge one, and the failure is silent:
+ * nothing is flagged and the badge stays quiet.
+ *
+ * `innerText` inserts a blank line between blocks that carry a margin. Those
+ * runs are collapsed so that writing the text back through `setText` reproduces
+ * the same number of blocks instead of doubling every line break.
+ */
+function readEditable(el: HTMLElement): string {
+  const rendered = el.innerText || el.textContent || ''
+  return rendered.replace(/\n{2,}/g, '\n')
+}
+
 export function makeComposer(el: HTMLElement): Composer {
   const isTextarea = el instanceof HTMLTextAreaElement
   return {
     el,
     isTextarea,
-    getText: () => (isTextarea ? (el as HTMLTextAreaElement).value : (el.textContent ?? '')),
+    getText: () => (isTextarea ? (el as HTMLTextAreaElement).value : readEditable(el)),
     setText: (text: string) => (isTextarea ? setTextarea(el as HTMLTextAreaElement, text) : setEditable(el, text)),
   }
 }

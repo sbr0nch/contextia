@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+**The browser extension missed secrets in any multi-line prompt.** `getText()`
+read `textContent`, which concatenates block elements with no separator at all.
+Every editor on the supported sites is block-based, so a two-paragraph prompt
+came back as one unbroken run of characters and the tokens at the block
+boundaries stopped matching. Measured on the exact shape ChatGPT and Claude
+produce: two planted secrets, zero flagged. Nothing appeared in the badge, so
+there was no sign anything had gone wrong. It reads `innerText` now, collapsing
+the blank line browsers insert between blocks so that writing the text back
+reproduces the same number of blocks instead of doubling every line break.
+
+- `npm run test:dom` drives the built extension in Chromium against the DOM
+  shapes the supported sites use: Lexical and ProseMirror paragraphs, Quill,
+  plain contenteditable, and a textarea. It asserts against the badge the
+  extension itself renders, so what is checked is what a user would see. Put the
+  old `textContent` back and four of the seven cases fail, which is the only
+  reason to trust a regression test.
+- `npm run test:docs` runs the commands the documentation tells people to run
+  and checks they do what is promised, including the exit codes a pre-commit
+  hook depends on. Three defects so far have come from the docs rather than the
+  code, and none of them were reachable by testing functions.
+- CI runs both.
+
 ## v2.0.2
 
 The 2.0.1 logo fix broke the logo. Parsing the mark as XML without an `xmlns`

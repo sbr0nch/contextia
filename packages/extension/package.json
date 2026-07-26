@@ -12,7 +12,8 @@
     "test": "vitest run",
     "build:firefox": "node build.mjs --firefox",
     "package:firefox": "node build.mjs --firefox && node pack.mjs dist-firefox",
-    "screenshots": "node build.mjs && node screenshots.mjs"
+    "screenshots": "node build.mjs && node screenshots.mjs",
+    "test:dom": "node build.mjs && node dom-integration.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
