@@ -15,10 +15,10 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
-    "esbuild": "^0.24.2",
-    "happy-dom": "^15.11.7",
+    "esbuild": "^0.25.12",
+    "happy-dom": "^20.11.1",
     "playwright": "^1.61.1",
-    "vitest": "^2.1.9"
+    "vitest": "^3.2.7"
   },
   "dependencies": {
     "@sbr0nch/contextia-engine": "*"

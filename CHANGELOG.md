@@ -26,6 +26,14 @@ Security and correctness pass. Three of these change observable behavior.
   the extension treats a truncated scan as unresolved in Block mode.
 - `Expect: 100-continue` is no longer relayed upstream. Clients that send it
   (curl does, above 1 KB) previously got a 502 from every request.
+- Dev dependencies moved to vitest 3, happy-dom 20 and esbuild 0.25, clearing
+  all three critical advisories (a happy-dom VM escape and a vitest arbitrary
+  file read, both reachable by anyone running the suite on an untrusted branch).
+  None of these ship: the published packages contain only `dist`. Four advisories
+  remain, all the same brace-expansion DoS surfacing through glob, minimatch and
+  test-exclude. Its only fix, brace-expansion 5.x, changes the export shape and
+  breaks minimatch, so taking it would trade an audit line for a broken coverage
+  run. Left in place deliberately until the chain upstream moves.
 - An invalid allowlist pattern no longer throws on every scan. Allowlist
   patterns are typed by the user in settings, so one stray bracket used to
   break detection entirely; bad patterns are skipped and the rest still apply.
