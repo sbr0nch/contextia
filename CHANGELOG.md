@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## v2.0.3
+
+**`@sbr0nch/contextia-engine` could not be imported. Not in this release, in any
+of them.** `exports` pointed at `./src/index.ts` while `files` shipped only
+`dist`, and `exports` beats `main`, so every consumer got ERR_MODULE_NOT_FOUND
+on the import line. Confirmed against the published tarballs for 0.1.0, 1.0.0,
+1.2.0, 2.0.0 and 2.0.2: all of them. It survived five releases because nothing
+in this repository consumes the package the way a stranger does. The CLI bundles
+the engine from workspace source at build time, and the tests import `dist` by
+absolute path, which bypasses `exports` entirely. Reported by someone who tried
+to use it from another project and had to patch it locally.
+
+`npm run test:pack` packs the tarballs, installs them into a project with no
+workspace to fall back on, and imports them by name. Restore the old `exports`
+and three of its six cases fail.
+
 
 **The browser extension missed secrets in any multi-line prompt.** `getText()`
 read `textContent`, which concatenates block elements with no separator at all.

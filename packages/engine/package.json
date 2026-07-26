@@ -1,6 +1,6 @@
 {
   "name": "@sbr0nch/contextia-engine",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Environment-agnostic secret detection engine. No DOM, no network, dependency-light.",
   "keywords": [
     "secrets",
@@ -25,8 +25,9 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "files": [

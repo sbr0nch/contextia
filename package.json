@@ -19,7 +19,8 @@
     "preflight": "node scripts/preflight.mjs",
     "test:docs": "npm run build --workspace @sbr0nch/contextia && node scripts/docs-commands.mjs",
     "test:dom": "npm run test:dom --workspace @sbr0nch/contextia-extension",
-    "test:proxy": "npm run test:proxy --workspace @sbr0nch/contextia"
+    "test:proxy": "npm run test:proxy --workspace @sbr0nch/contextia",
+    "test:pack": "node scripts/test-packaging.mjs"
   },
   "engines": {
     "node": ">=20"
