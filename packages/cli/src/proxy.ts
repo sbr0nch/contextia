@@ -256,7 +256,29 @@ export function createProxyServer(opts: ProxyOptions): Server {
     byType: {},
     bySite: {},
   }
-  return createServer((req, res) => void handle(req, res, opts, config, stats))
+  const server = createServer((req, res) => {
+    handle(req, res, opts, config, stats).catch((err: unknown) => {
+      // A client that goes away mid-request rejects the body read. That is
+      // routine (Ctrl+C in the agent, a timeout, a retry), but the rejection
+      // used to escape unhandled and Node killed the whole proxy with it, so
+      // the next request got ECONNREFUSED and the guard was simply gone.
+      const gone = req.destroyed || res.destroyed || (err as NodeJS.ErrnoException)?.code === 'ECONNRESET'
+      if (!gone) process.stderr.write(`contextia: request failed: ${String(err)}\n`)
+      if (res.destroyed) return
+      if (res.headersSent) {
+        res.end()
+        return
+      }
+      res.writeHead(502, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ error: { type: 'contextia_proxy_error', message: String(err) } }))
+    })
+  })
+  // Malformed requests reach the server before any handler runs. Without this
+  // they surface as an uncaught 'clientError' and take the process down too.
+  server.on('clientError', (_err, socket) => {
+    if (!socket.destroyed) socket.end('HTTP/1.1 400 Bad Request\r\n\r\n')
+  })
+  return server
 }
 
 async function handle(
@@ -429,9 +451,14 @@ async function handle(
 
   res.writeHead(upstreamRes.status, outHeaders)
   if (upstreamRes.body) {
-    for await (const chunk of upstreamRes.body as unknown as AsyncIterable<Uint8Array>) res.write(chunk)
+    // Stop reading upstream the moment the client goes away, rather than
+    // draining a response nobody is listening to.
+    for await (const chunk of upstreamRes.body as unknown as AsyncIterable<Uint8Array>) {
+      if (res.destroyed) return
+      res.write(chunk)
+    }
   }
-  res.end()
+  if (!res.destroyed) res.end()
 }
 
 // Brand loading/live mark: the two masked dots pulsing between brackets.

@@ -18,7 +18,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "preflight": "node scripts/preflight.mjs",
     "test:docs": "npm run build --workspace @sbr0nch/contextia && node scripts/docs-commands.mjs",
-    "test:dom": "npm run test:dom --workspace @sbr0nch/contextia-extension"
+    "test:dom": "npm run test:dom --workspace @sbr0nch/contextia-extension",
+    "test:proxy": "npm run test:proxy --workspace @sbr0nch/contextia"
   },
   "engines": {
     "node": ">=20"

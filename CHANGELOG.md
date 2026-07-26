@@ -12,6 +12,19 @@ there was no sign anything had gone wrong. It reads `innerText` now, collapsing
 the blank line browsers insert between blocks so that writing the text back
 reproduces the same number of blocks instead of doubling every line break.
 
+**A client hanging up mid-request killed the proxy.** The body read rejects when
+the socket goes away, the rejection escaped unhandled, and Node took the process
+down with it. Ctrl+C in your agent was enough, and every request after that got
+ECONNREFUSED: the guard was gone, and nothing said so. Rejections are caught
+now, malformed requests are answered rather than fatal, and the response loop
+stops reading upstream once the client has left. Streaming stays incremental,
+which was worth checking while changing that loop.
+
+- `npm run test:proxy` runs the proxy as a real process over a real socket:
+  client aborts, an upstream that dies mid-response, a malformed request, and 50
+  concurrent requests. The unit suite drives the server in-process with
+  well-behaved clients, so none of this was reachable from it. Put the old
+  `void handle(...)` back and all eight cases fail.
 - `npm run test:dom` drives the built extension in Chromium against the DOM
   shapes the supported sites use: Lexical and ProseMirror paragraphs, Quill,
   plain contenteditable, and a textarea. It asserts against the badge the
