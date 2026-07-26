@@ -51,12 +51,18 @@ alias claude='contextia run -- claude'
 ```
 
 For a shared egress point instead of per-laptop, run one proxy and point agents
-at it with `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL`:
+at it with `ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL`. The proxy binds loopback by
+default, so a shared instance has to be told to listen on a reachable address:
 
 ```bash
-contextia proxy --mode redact --port 8787
-#   live stats: http://localhost:8787/__contextia
+contextia proxy --mode redact --port 8787 --host 0.0.0.0
+#   live stats: http://<host>:8787/__contextia
 ```
+
+Only do this on a network you control. Everything the agents send passes through
+this process in plaintext, and the stats dashboard is served to anyone who can
+reach the port. Put it behind the same access controls as any internal service;
+on a laptop, leave the default and use `contextia run` instead.
 
 ## 3. Optional: pin a team policy file
 

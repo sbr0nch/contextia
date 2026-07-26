@@ -37,6 +37,14 @@ Security and correctness pass. Three of these change observable behavior.
 - An invalid allowlist pattern no longer throws on every scan. Allowlist
   patterns are typed by the user in settings, so one stray bracket used to
   break detection entirely; bad patterns are skipped and the rest still apply.
+- The send gate moved into `gate.ts` as two pure functions, so Block mode's
+  refusal to send on a partially scanned composer is covered by tests instead of
+  being buried in DOM handlers.
+- `docs/DEPLOYMENT.md` now shows `--host` for the shared-proxy setup, which the
+  loopback default would otherwise have silently broken, with a note on what
+  exposing it means.
+- The README states the reversible-mode trade-off: restoring puts the real value
+  back into the response, so it lands wherever the agent writes its replies.
 - The stats dashboard escapes detector and site labels, which arrive from the
   browser reporter and were rendered as markup.
 

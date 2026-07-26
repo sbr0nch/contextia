@@ -43,6 +43,13 @@ ANTHROPIC_BASE_URL=http://localhost:8787 claude   # point your agent at it
 `--reversible` swaps each secret for a local token and restores the originals in
 the model's reply, so the answer stays usable while the real value never leaves.
 
+Understand the trade-off before you turn it on. Restoring means the real value
+is written back into the response your agent receives, so it can end up wherever
+that agent puts the reply: a terminal scrollback, a log file, a file it edits.
+The vault is per-request, so a model can only ever get back a value that was in
+that same request, but on this path the secret does reach your disk again.
+Leave it off if what you want is for the value never to reappear at all.
+
 Works with any agent that lets you set its API base URL: **Claude Code, Cursor,
 Windsurf, aider, or your own API scripts**. Either use `contextia run -- <agent>`
 (it wires everything up), or point the agent's base URL at the proxy manually

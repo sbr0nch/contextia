@@ -3,6 +3,7 @@ import { findComposer, type Composer } from './composer.js'
 import { Hud } from './ui.js'
 import { api } from './api.js'
 import { scoreSendButton, isSendTarget } from './send-button.js'
+import { shouldBlockSend, needsAttention } from './gate.js'
 import {
   getSettings,
   toEngineConfig,
@@ -116,7 +117,7 @@ function scanText(text: string): Finding[] {
 // In Block mode, dim the site's send button so it's clear why nothing happens.
 let dimmedButton: HTMLElement | null = null
 function updateSendButton(): void {
-  const shouldDim = settings.mode === 'block' && (findings.length > 0 || scanTruncated)
+  const shouldDim = shouldBlockSend({ findings, truncated: scanTruncated }, settings.mode)
   if (!shouldDim) {
     if (dimmedButton) {
       restoreButton(dimmedButton)
@@ -157,11 +158,6 @@ function withSignature(text: string, count: number): string {
   return `[${count} ${s} ${SIGNATURE_MARK}, contextia.dev]\n${text}`
 }
 
-/** Block mode treats an unread tail as unresolved, even with nothing flagged. */
-function blockingOnTruncation(): boolean {
-  return settings.mode === 'block' && scanTruncated
-}
-
 function doRedact(action: LogAction): void {
   if (!composer || findings.length === 0) return
   const redacted = withSignature(redact(composer.getText(), findings), findings.length)
@@ -173,7 +169,7 @@ function doRedact(action: LogAction): void {
 }
 
 function onKeydown(e: KeyboardEvent): void {
-  if (findings.length === 0 && !blockingOnTruncation()) return
+  if (!needsAttention({ findings, truncated: scanTruncated }, settings.mode)) return
   if (e.key !== 'Enter' || e.shiftKey) return
   if (settings.mode === 'block') blockSubmit(e)
   else if (settings.mode === 'warn') markLeaked()
@@ -182,14 +178,14 @@ function onKeydown(e: KeyboardEvent): void {
 // Block mode stops a click on the send button; warn mode lets it through but
 // records that the flagged secret was sent anyway.
 function onSendClick(e: MouseEvent): void {
-  if (findings.length === 0 && !blockingOnTruncation()) return
+  if (!needsAttention({ findings, truncated: scanTruncated }, settings.mode)) return
   if (!isSendTarget(e.target)) return
   if (settings.mode === 'block') blockSubmit(e)
   else if (settings.mode === 'warn') markLeaked()
 }
 
 function onSubmit(e: Event): void {
-  if (findings.length === 0 && !blockingOnTruncation()) return
+  if (!needsAttention({ findings, truncated: scanTruncated }, settings.mode)) return
   if (settings.mode === 'block') blockSubmit(e)
   else if (settings.mode === 'warn') markLeaked()
 }
