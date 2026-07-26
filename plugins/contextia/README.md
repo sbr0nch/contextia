@@ -41,6 +41,32 @@ select `contextia`, then **Enable auto-update**.
 Or open `/plugin`, go to the **Installed** tab, and disable or uninstall it
 there.
 
+## If `/plugin` is not available
+
+The `/plugin` panel is part of the Claude Code terminal CLI. In the web app or a
+cloud session it answers `/plugin isn't available in this environment`, and the
+commands above do nothing for you. Two other routes:
+
+**Claude desktop app**: use its plugin browser rather than the slash command.
+
+**Cloud sessions and shared projects**: declare the marketplace and the plugin in
+`.claude/settings.json`, committed to the repository so everyone working in it
+gets the same guard:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "contextia": {
+      "source": { "source": "github", "repo": "sbr0nch/contextia" }
+    }
+  },
+  "enabledPlugins": ["contextia@contextia"]
+}
+```
+
+Updates there follow the pinned repository rather than a command you run: push
+to the marketplace and the next session picks it up.
+
 ## Configuration (optional)
 
 By default the plugin blocks on the critical detectors. To customise which

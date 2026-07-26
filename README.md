@@ -74,6 +74,10 @@ proxy, nothing to install but the plugin itself (the engine is bundled):
 /reload-plugins
 ```
 
+`/plugin` is a terminal CLI panel. In the web app or a cloud session it is not
+available; see [`plugins/contextia`](plugins/contextia) for the
+`.claude/settings.json` route.
+
 It runs on `UserPromptSubmit` and stops the prompt if a secret is detected.
 Hooks can't rewrite text, so this **blocks**. For redaction use the proxy
 (`contextia run -- claude`). See [`plugins/contextia`](plugins/contextia).
