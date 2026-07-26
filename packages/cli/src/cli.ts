@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import type { AddressInfo } from 'node:net'
 import { detectDetailed, redact, detectors, type Finding } from '@sbr0nch/contextia-engine'
@@ -32,9 +33,57 @@ function flagValue(name: string): string | undefined {
   return undefined
 }
 
+// Directories a scan should never descend into. Scanning a dependency tree
+// finds other people's fixtures, not your secrets, and buries the real hits.
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'dist-firefox', 'coverage', '.next', 'build', 'vendor'])
+
+// Binary-ish extensions: reading them as utf8 produces noise, not findings.
+const SKIP_EXT = /\.(png|jpe?g|gif|webp|ico|svg|pdf|zip|gz|tgz|xz|7z|rar|mp[34]|mov|woff2?|ttf|eot|wasm|so|dylib|dll|exe|class|jar|pyc|lock)$/i
+
+function walk(dir: string, out: string[]): void {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (e.name.startsWith('.') && e.name !== '.env') continue
+    const full = join(dir, e.name)
+    if (e.isDirectory()) {
+      if (!SKIP_DIRS.has(e.name)) walk(full, out)
+    } else if (e.isFile() && !SKIP_EXT.test(e.name)) {
+      out.push(full)
+    }
+  }
+}
+
+/**
+ * Resolve the paths given on the command line to readable files.
+ *
+ * Directories are walked, because `contextia scan .` and `contextia scan src/`
+ * are the documented usage and used to die on an EISDIR stack trace while still
+ * exiting 0, which in a pre-commit hook or CI reads as "nothing found".
+ * Anything unreadable is now reported and exits non-zero.
+ */
 function inputs(): Array<{ name: string; text: string }> {
   if (paths.length === 0) return [{ name: '(stdin)', text: readFileSync(0, 'utf8') }]
-  return paths.map((p) => ({ name: p, text: readFileSync(p, 'utf8') }))
+  const files: string[] = []
+  for (const p of paths) {
+    let st
+    try {
+      st = statSync(p)
+    } catch {
+      process.stderr.write(`contextia: cannot read ${p}\n`)
+      process.exit(2)
+    }
+    if (st.isDirectory()) walk(p, files)
+    else files.push(p)
+  }
+  const out: Array<{ name: string; text: string }> = []
+  for (const f of files) {
+    try {
+      out.push({ name: f, text: readFileSync(f, 'utf8') })
+    } catch {
+      process.stderr.write(`contextia: cannot read ${f}\n`)
+      process.exit(2)
+    }
+  }
+  return out
 }
 
 function cmdScan(): void {

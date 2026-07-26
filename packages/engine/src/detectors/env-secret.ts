@@ -7,6 +7,18 @@ const RE =
 
 const PLACEHOLDER = /^\$[{(]|^<|^your_|^changeme$|^x{3,}$|^\.{3,}$/i
 
+// The key pattern above matches identifiers as well as env keys, so in source
+// code `nextToken = punctuator;` reads as KEY=value. Two signals separate an
+// assignment in code from a secret in a .env file.
+//
+// A value ending in a statement terminator is code, never an env value.
+const CODE_TAIL = /[;,)}\]]$/
+// Secret material carries digits or base64 padding. An all-letter value is a
+// word: `punctuator`, `NonKeyword`, `IntTemplate`. This does cost us a secret
+// made only of letters, which is the trade for not crying wolf on every
+// minified bundle a user scans.
+const SECRET_SHAPE = /[0-9+/=]/
+
 export const envSecret: Detector = {
   id: 'env_secret',
   label: 'Secret in KEY=value',
@@ -17,6 +29,8 @@ export const envSecret: Detector = {
     for (const m of text.matchAll(RE)) {
       const value = m[1]!
       if (PLACEHOLDER.test(value)) continue
+      if (CODE_TAIL.test(value)) continue
+      if (!SECRET_SHAPE.test(value)) continue
       const start = m.index! + m[0].lastIndexOf(value)
       out.push({ start, end: start + value.length, match: value })
     }
@@ -35,6 +49,9 @@ export const envSecret: Detector = {
       'PORT=8080',
       'PASSWORD=${DB_PASSWORD}', // placeholder, not a real secret
       'ENCRYPTION_ALGORITHM=aes-256-gcm', // an algorithm name, not a secret
+      'nextToken = punctuator;', // an assignment in source, not an env line
+      'tokenKind = IntTemplate', // a word, not secret material
+      'AUTH_MODE=interactive' // a setting whose value is a plain word
     ],
   },
 }

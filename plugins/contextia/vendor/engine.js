@@ -278,6 +278,8 @@ var privateKey = {
 // packages/engine/src/detectors/env-secret.ts
 var RE9 = /(?:^|\n)[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]*[ \t]*=[ \t]*['"]?([^\s'"#]{8,})['"]?/gi;
 var PLACEHOLDER = /^\$[{(]|^<|^your_|^changeme$|^x{3,}$|^\.{3,}$/i;
+var CODE_TAIL = /[;,)}\]]$/;
+var SECRET_SHAPE = /[0-9+/=]/;
 var envSecret = {
   id: "env_secret",
   label: "Secret in KEY=value",
@@ -288,6 +290,8 @@ var envSecret = {
     for (const m of text.matchAll(RE9)) {
       const value = m[1];
       if (PLACEHOLDER.test(value)) continue;
+      if (CODE_TAIL.test(value)) continue;
+      if (!SECRET_SHAPE.test(value)) continue;
       const start = m.index + m[0].lastIndexOf(value);
       out.push({ start, end: start + value.length, match: value });
     }
@@ -306,8 +310,14 @@ var envSecret = {
       "PORT=8080",
       "PASSWORD=${DB_PASSWORD}",
       // placeholder, not a real secret
-      "ENCRYPTION_ALGORITHM=aes-256-gcm"
+      "ENCRYPTION_ALGORITHM=aes-256-gcm",
       // an algorithm name, not a secret
+      "nextToken = punctuator;",
+      // an assignment in source, not an env line
+      "tokenKind = IntTemplate",
+      // a word, not secret material
+      "AUTH_MODE=interactive"
+      // a setting whose value is a plain word
     ]
   }
 };
