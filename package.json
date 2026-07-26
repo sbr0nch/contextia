@@ -15,7 +15,8 @@
     "verify": "npm run typecheck && npm test && npm run acceptance && npm run build",
     "acceptance": "npm run acceptance --workspace @sbr0nch/contextia-engine",
     "build": "npm run build --workspaces --if-present && node plugins/contextia/build.mjs",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "preflight": "node scripts/preflight.mjs"
   },
   "engines": {
     "node": ">=20"

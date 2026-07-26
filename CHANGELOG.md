@@ -1,13 +1,24 @@
 # Changelog
 
-## Extension v2.0.1
+## v2.0.1
+
+Every surface now ships the same version number, including the ones that did not
+change. They had drifted (the plugin sat at 1.2.1 while the packages were at
+1.3.0) and drift is what makes a release take an evening instead of ten minutes.
 
 - The popup, options page and in-page badge built their SVG by assigning a
   constant to `innerHTML`. Nothing was ever interpolated into that markup, so it
   was not exploitable, but AMO and the Chrome Web Store flag every `innerHTML`
   write and an extension that sells caution should not be arguing the point.
   They now parse the markup once with `DOMParser` and append a real node.
-  No behaviour change. Extension only; the CLI and engine stay at 2.0.0.
+  No behaviour change.
+- `npm run preflight` checks the things that stay invisible until a store
+  reviewer finds them: version drift across the six channels, `innerHTML` in a
+  built bundle, em dashes in tracked files, a dirty tree. It prints the
+  per-channel checklist with the version filled in.
+- `RELEASING.md` writes down where each of the six version numbers lives and the
+  order to publish in. The Claude Code plugin needs two files bumped, not one,
+  which is why the last plugin update never reached anyone.
 
 ## v2.0.0
 
