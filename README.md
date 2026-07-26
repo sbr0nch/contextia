@@ -71,6 +71,7 @@ proxy, nothing to install but the plugin itself (the engine is bundled):
 ```
 /plugin marketplace add sbr0nch/contextia
 /plugin install contextia@contextia
+/reload-plugins
 ```
 
 It runs on `UserPromptSubmit` and stops the prompt if a secret is detected.

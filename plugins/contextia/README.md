@@ -10,17 +10,36 @@ Everything runs on-device; nothing is sent anywhere.
 ```
 /plugin marketplace add sbr0nch/contextia
 /plugin install contextia@contextia
+/reload-plugins
 ```
 
-That's it. Now, if you submit a prompt that contains a secret, Claude Code stops
-it and tells you what was found. Remove it and send again.
+Now, if you submit a prompt that contains a secret, Claude Code stops it and
+tells you what was found. Remove it and send again.
 
-## Update / uninstall
+## Update
+
+Two steps, and the second is the one people miss. Refreshing the marketplace
+pulls the new catalog; it does not update the copy you already have installed.
 
 ```
-/plugin marketplace update contextia   # pull the latest
-/plugin                                 # menu: enable, disable, or uninstall
+/plugin marketplace update contextia
+/plugin update contextia@contextia
+/reload-plugins
 ```
+
+Claude Code enables auto-update by default only for Anthropic's own
+marketplaces. Third-party ones, this included, start with it off, so nothing
+arrives on its own until you turn it on: `/plugin`, the **Marketplaces** tab,
+select `contextia`, then **Enable auto-update**.
+
+## Uninstall
+
+```
+/plugin uninstall contextia@contextia
+```
+
+Or open `/plugin`, go to the **Installed** tab, and disable or uninstall it
+there.
 
 ## Configuration (optional)
 
