@@ -18,8 +18,8 @@
   "devDependencies": {
     "@types/chrome": "^0.0.287",
     "esbuild": "^0.25.12",
-    "happy-dom": "^20.11.1",
-    "playwright": "^1.61.1",
+    "happy-dom": "^20.11.2",
+    "playwright": "^1.62.1",
     "vitest": "^3.2.7"
   },
   "dependencies": {
