@@ -23,3 +23,20 @@ describe('customFindings', () => {
     expect(redact('project Zephyr ships', fs)).toBe('project ⟨redacted:custom⟩ ships')
   })
 })
+
+describe('custom patterns that can match nothing', () => {
+  it('skips zero-length matches instead of emitting empty findings', async () => {
+    const { customFindings } = await import('../src/custom.js')
+    // `x*` matches the empty string at every position. Without the guard this
+    // would return a finding per character, each of them empty.
+    const found = customFindings('abc', { values: [], patterns: ['x*'] })
+    expect(found).toHaveLength(0)
+  })
+
+  it('still matches the same pattern where it has something to match', async () => {
+    const { customFindings } = await import('../src/custom.js')
+    const found = customFindings('axxxb', { values: [], patterns: ['x*'] })
+    expect(found).toHaveLength(1)
+    expect(found[0]?.match).toBe('xxx')
+  })
+})

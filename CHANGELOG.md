@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Dev dependencies move to TypeScript 7, vitest 4, esbuild 0.28, and the current
+  `@types/node` and `@types/chrome`. All eight majors together, verified across
+  every suite. `npm audit` goes from two high advisories to zero: the
+  brace-expansion chain we could not fix without breaking the coverage run is
+  gone with the newer tree.
+- vitest 4 counts a branch vitest 3 did not, which turned up a case nobody had
+  tested: a custom pattern that can match the empty string, such as `x*`. The
+  guard against zero-length matches was already there, but nothing exercised it,
+  so a regression would have gone unnoticed.
+
+
 Two findings from putting the extension and the dashboard under load. Neither is
 in the class that lets a secret through, and both were quiet failures rather
 than loud ones.
