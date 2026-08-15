@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.0.4
 
 - Dev dependencies move to TypeScript 7, vitest 4, esbuild 0.28, and the current
   `@types/node` and `@types/chrome`. All eight majors together, verified across
