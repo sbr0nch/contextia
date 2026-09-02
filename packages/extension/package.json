@@ -16,11 +16,11 @@
     "test:dom": "node build.mjs && node dom-integration.mjs"
   },
   "devDependencies": {
-    "@types/chrome": "^0.2.6",
+    "@types/chrome": "^0.2.7",
     "esbuild": "^0.28.2",
-    "happy-dom": "^20.11.2",
+    "happy-dom": "^20.12.0",
     "playwright": "^1.62.1",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@sbr0nch/contextia-engine": "*"
