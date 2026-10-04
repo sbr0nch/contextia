@@ -21,6 +21,49 @@ function run(stdin: string, opts: { root?: string; env?: Record<string, string> 
 }
 const blocked = (out: string): boolean => (out ? (JSON.parse(out) as { decision?: string }).decision === 'block' : false)
 
+// A pipe is written asynchronously on some platforms (and on Linux for large output): the
+// bytes leave after write() returns. Simulate it by delaying stdout, which is where
+// `process.exit()` straight after `write()` loses the answer, and so does any path that
+// exits while a block is still being written.
+describe('plugin hook, when stdout is slow', () => {
+  function withSlowStdout(input: string): { out: string; status: number | null } {
+    const dir = mkdtempSync(join(tmpdir(), 'cx-slow-'))
+    try {
+      const pre = join(dir, 'slow.cjs')
+      writeFileSync(
+        pre,
+        `const w = process.stdout.write.bind(process.stdout)
+         process.stdout.write = (chunk, enc, cb) => { const done = typeof enc === 'function' ? enc : cb; setTimeout(() => { w(chunk); done && done() }, 250); return true }`,
+      )
+      const r = spawnSync(process.execPath, ['--require', pre, join(PLUGIN, 'hooks/guard.mjs')], { input, encoding: 'utf8' })
+      return { out: r.stdout, status: r.status }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  it('still delivers the block for a prompt with a secret', () => {
+    const r = withSlowStdout(JSON.stringify({ prompt: `k ${SECRET}` }))
+    expect(blocked(r.out)).toBe(true)
+  })
+
+  it('still delivers the block for a prompt past the scan cap', () => {
+    const r = withSlowStdout(JSON.stringify({ prompt: 'x'.repeat(1_100_000) }))
+    expect(blocked(r.out)).toBe(true)
+  })
+
+  it('still delivers the block when it could not scan at all', () => {
+    const r = withSlowStdout('')
+    expect(blocked(r.out)).toBe(true)
+  })
+
+  it('stays silent, exit 0, for a clean prompt', () => {
+    const r = withSlowStdout(JSON.stringify({ prompt: 'hello' }))
+    expect(r.status).toBe(0)
+    expect(r.out).toBe('')
+  })
+})
+
 describe('plugin hook, when the prompt cannot be read', () => {
   // readStdin used to swallow every error and return '', which scans clean: a prompt
   // the hook could not read was sent. These are the ways stdin fails.
