@@ -13,6 +13,8 @@ import {
   textNodes,
   createProxyServer,
   MAX_STAT_KEYS,
+  DEFAULT_MAX_SCAN_BODY,
+  DEFAULT_MAX_BODY,
   type ProxyStats,
   type ProxyMode,
 } from '../src/proxy.js'
@@ -320,7 +322,7 @@ describe('methods, size limits and refusals', () => {
       s.listen(0, () => r((s.address() as AddressInfo).port))
     })
 
-  async function setup(mode: ProxyMode) {
+  async function setup(mode: ProxyMode, limits: { maxBodyBytes?: number; maxScanBytes?: number } = {}) {
     const calls: Array<{ method: string; body: string }> = []
     const up = createServer(async (req, res) => {
       const ch: Buffer[] = []
@@ -330,7 +332,7 @@ describe('methods, size limits and refusals', () => {
       res.end('{"ok":1}')
     })
     const upPort = await listen(up)
-    const proxy = createProxyServer({ port: 0, mode, upstream: `http://localhost:${upPort}` })
+    const proxy = createProxyServer({ port: 0, mode, upstream: `http://localhost:${upPort}`, ...limits })
     const port = await listen(proxy)
     const get = async (path: string, init: RequestInit = {}) => {
       const r = await fetch(`http://localhost:${port}${path}`, init)
@@ -388,9 +390,9 @@ describe('methods, size limits and refusals', () => {
     expect(t.calls).toHaveLength(0)
   })
 
-  it('block: a body over the 5 MB scan cap is refused as oversize, and counted as one block', async () => {
-    const t = await setup('block')
-    const r = await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x'.repeat(5 * 1024 * 1024 + 10)) })
+  it('block: a body over the scan cap is refused as oversize, and counted as one block', async () => {
+    const t = await setup('block', { maxScanBytes: 100_000 })
+    const r = await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x'.repeat(100_010)) })
     expect(r.status).toBe(403)
     expect(JSON.parse(r.text).error).toMatchObject({ type: 'contextia_unscannable', reason: 'oversize' })
     expect(await t.stats()).toMatchObject({ blocked: 1 })
@@ -423,10 +425,51 @@ describe('methods, size limits and refusals', () => {
   })
 
   it('warn: forwards an oversize and an unreadable body, and counts each as unscanned', async () => {
-    const t = await setup('warn')
-    await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x'.repeat(5 * 1024 * 1024 + 10)) })
+    const t = await setup('warn', { maxScanBytes: 100_000 })
+    await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x'.repeat(100_010)) })
     await t.get('/v1/messages', { method: 'POST', headers: { ...JSON_H, 'content-encoding': 'zstd' }, body: 'x' })
     expect(t.calls).toHaveLength(2)
     expect(await t.stats()).toMatchObject({ unscanned: 2, blocked: 0 })
+  })
+
+  // A 300 MB body took the proxy to 1,268 MB: the whole body was read into memory, and
+  // then copied. There was no limit on what a client, or a web page, could make it hold.
+  it('answers 413 to a body over the read limit, without forwarding it, and stays up', async () => {
+    const t = await setup('redact', { maxBodyBytes: 200_000 })
+    const big = await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x'.repeat(250_000)) })
+    expect(big.status).toBe(413)
+    expect(JSON.parse(big.text).error.type).toBe('contextia_request_too_large')
+    expect(t.calls).toHaveLength(0)
+    const ok = await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('small') })
+    expect(ok.status).toBe(200)
+    expect(t.calls).toHaveLength(1)
+  })
+
+  it('stops reading at the limit when the size is not declared (chunked)', async () => {
+    const t = await setup('redact', { maxBodyBytes: 100_000 })
+    const chunk = Buffer.alloc(40_000, 0x61)
+    const r = await new Promise<number>((resolve) => {
+      const q = request({ host: '127.0.0.1', port: t.port, method: 'POST', path: '/v1/x', headers: { 'content-type': 'application/octet-stream', 'transfer-encoding': 'chunked' } }, (res) => {
+        res.resume()
+        res.on('end', () => resolve(res.statusCode ?? 0))
+      })
+      q.on('error', () => resolve(413)) // the proxy may close the socket as it answers
+      for (let i = 0; i < 10; i++) q.write(chunk)
+      q.end()
+    })
+    expect(r).toBe(413)
+    expect(t.calls).toHaveLength(0)
+  })
+
+  it('applies a small limit to the events route too', async () => {
+    const t = await setup('warn')
+    const r = await t.get('/__contextia/events', { method: 'POST', headers: JSON_H, body: JSON.stringify({ events: [ev()], pad: 'x'.repeat(2_000_000) }) })
+    expect(r.status).toBe(413)
+  })
+
+  it('has defaults that fit the largest requests an LLM API accepts, and a scan cap below the read cap', async () => {
+    expect(DEFAULT_MAX_SCAN_BODY).toBe(32 * 1024 * 1024)
+    expect(DEFAULT_MAX_BODY).toBe(64 * 1024 * 1024)
+    expect(DEFAULT_MAX_SCAN_BODY).toBeLessThan(DEFAULT_MAX_BODY)
   })
 })

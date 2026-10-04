@@ -22,6 +22,10 @@ export interface ProxyOptions {
   /** Interface to bind. Defaults to 127.0.0.1; anything else exposes the proxy. */
   host?: string | undefined
   upstream?: string | undefined
+  /** Largest request body that is read; above it the answer is 413. */
+  maxBodyBytes?: number | undefined
+  /** Largest body that is scanned; above it the body is unscannable. */
+  maxScanBytes?: number | undefined
   all?: boolean | undefined
   custom?: CustomRules | undefined
   reversible?: boolean | undefined
@@ -47,11 +51,13 @@ export interface ProxyStats {
   bySite: Record<string, number>
 }
 
-const UNSCANNABLE_DETAIL: Record<UnscannableReason, string> = {
-  oversize: 'larger than the 5 MB scan cap',
-  encoding: 'unsupported content-encoding, or larger than the 5 MB scan cap once decompressed',
+const mb = (n: number): string => `${Math.round((n / (1024 * 1024)) * 10) / 10} MB`
+
+const unscannableDetail = (limit: number): Record<UnscannableReason, string> => ({
+  oversize: `larger than the ${mb(limit)} scan cap`,
+  encoding: `unsupported content-encoding, or larger than the ${mb(limit)} scan cap once decompressed`,
   unparsable: 'not JSON we understand',
-}
+})
 
 /** A secret-free browser catch, reported to the local dashboard. Counts only. */
 export interface BrowserEvent {
@@ -306,7 +312,12 @@ const SKIP_REQUEST_HEADERS = new Set([
   'trailer',
   'proxy-connection',
 ])
-const MAX_SCAN_BODY = 5 * 1024 * 1024 // larger bodies cannot be scanned in one pass
+/** Larger bodies are forwarded unscanned (warn, redact) or refused (block). */
+export const DEFAULT_MAX_SCAN_BODY = 32 * 1024 * 1024
+/** Larger bodies are not read at all: the proxy answers 413. Memory is about four times the body. */
+export const DEFAULT_MAX_BODY = 64 * 1024 * 1024
+/** The events route takes a counts-only batch; a thousand events is about 100 KB. */
+const MAX_EVENTS_BODY = 1024 * 1024
 
 /** Why a body could not be inspected. Null means it was scanned normally. */
 export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable'
@@ -315,12 +326,12 @@ export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable'
  * Decode a request body for scanning. Returns null when the encoding is one we
  * cannot read, which must never be silently treated as "no secrets".
  */
-export function decodeBody(body: Buffer, encoding?: string): Buffer | null {
+export function decodeBody(body: Buffer, encoding?: string, maxOutput: number = DEFAULT_MAX_SCAN_BODY): Buffer | null {
   const enc = (encoding ?? '').trim().toLowerCase()
   try {
     if (enc === '' || enc === 'identity') return body
     // Capped: a 400 KB gzip expands to 400 MB, and the proxy used to allocate all of it.
-    const cap = { maxOutputLength: MAX_SCAN_BODY }
+    const cap = { maxOutputLength: maxOutput }
     if (enc === 'gzip' || enc === 'x-gzip') return gunzipSync(body, cap)
     if (enc === 'deflate') return inflateSync(body, cap)
     if (enc === 'br') return brotliDecompressSync(body, cap)
@@ -368,6 +379,30 @@ export function createProxyServer(opts: ProxyOptions): Server {
   return server
 }
 
+/** Read a request body, or return null after answering 413 when it passes `limit`. */
+async function readBody(req: IncomingMessage, res: ServerResponse, limit: number): Promise<Buffer | null> {
+  const chunks: Buffer[] = []
+  let total = 0
+  const declared = Number(req.headers['content-length'])
+  if (Number.isFinite(declared) && declared > limit) total = declared
+  if (total <= limit) {
+    for await (const c of req) {
+      total += (c as Buffer).length
+      if (total > limit) break
+      chunks.push(c as Buffer)
+    }
+  }
+  if (total <= limit) return Buffer.concat(chunks)
+  res.writeHead(413, { 'content-type': 'application/json', connection: 'close' })
+  res.end(
+    JSON.stringify({
+      error: { type: 'contextia_request_too_large', message: `Contextia does not read a request body over ${mb(limit)}; this one was larger.` },
+    }),
+  )
+  res.on('finish', () => req.destroy())
+  return null
+}
+
 async function handle(
   req: IncomingMessage,
   res: ServerResponse,
@@ -403,11 +438,11 @@ async function handle(
       res.end()
       return
     }
-    const chunks: Buffer[] = []
-    for await (const c of req) chunks.push(c as Buffer)
+    const raw = await readBody(req, res, MAX_EVENTS_BODY)
+    if (raw === null) return
     let events: BrowserEvent[] | null = null
     try {
-      events = parseEventBatch(JSON.parse(Buffer.concat(chunks).toString('utf8')))
+      events = parseEventBatch(JSON.parse(raw.toString('utf8')))
     } catch {
       events = null
     }
@@ -422,11 +457,12 @@ async function handle(
     return
   }
 
-  const chunks: Buffer[] = []
-  for await (const c of req) chunks.push(c as Buffer)
-  let body = Buffer.concat(chunks)
+  const read = await readBody(req, res, opts.maxBodyBytes ?? DEFAULT_MAX_BODY)
+  if (read === null) return
+  let body = read
   stats.requests++
 
+  const scanLimit = opts.maxScanBytes ?? DEFAULT_MAX_SCAN_BODY
   const vault = opts.reversible && opts.mode === 'redact' ? new Map<string, string>() : undefined
   const reqEncoding = req.headers['content-encoding']
   let dropContentEncoding = false
@@ -435,10 +471,10 @@ async function handle(
   // Any method that carries a body. This was POST and PUT only: a PATCH or DELETE with
   // a prompt in it went upstream unscanned and unreported.
   if (req.method !== 'GET' && req.method !== 'HEAD' && body.length > 0) {
-    if (body.length > MAX_SCAN_BODY) {
+    if (body.length > scanLimit) {
       unscannable = 'oversize'
     } else {
-      const decoded = decodeBody(body, Array.isArray(reqEncoding) ? reqEncoding[0] : reqEncoding)
+      const decoded = decodeBody(body, Array.isArray(reqEncoding) ? reqEncoding[0] : reqEncoding, scanLimit)
       if (decoded === null) {
         unscannable = 'encoding'
       } else {
@@ -484,7 +520,7 @@ async function handle(
   // A body we could not read is unknown, not clean. Block mode must fail closed,
   // otherwise its one promise is broken by anything gzipped or oversized.
   if (unscannable) {
-    const detail = UNSCANNABLE_DETAIL[unscannable]
+    const detail = unscannableDetail(scanLimit)[unscannable]
     if (opts.mode === 'block') {
       stats.blocked++
       process.stderr.write(`contextia: blocked an unscannable request body (${detail})\n`)
