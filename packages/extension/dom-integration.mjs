@@ -102,6 +102,46 @@ async function badgeCount(pg) {
   })
 }
 
+// Block mode must stop a send that comes right after the secret appears. The
+// content script rescans on a 150 ms debounce, so the findings it decided from
+// could be stale: measured in Chromium, an Enter pressed 0 to 100 ms after the
+// secret landed reached the site, and one at 200 ms did not. Each case types the
+// secret, presses Enter after the delay, and asks whether the page saw the Enter.
+const RACE_DELAYS = [0, 20, 100]
+async function blockRace(ctx) {
+  let failed = 0
+  const sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'))
+  await sw.evaluate(() => chrome.storage.local.set({ settings: { mode: 'block' } }))
+  try {
+    for (const delay of RACE_DELAYS) {
+      const pg = await ctx.newPage()
+      await pg.route('**/*', (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: 'text/html; charset=utf-8',
+          body: page(`<form><textarea id="t" style="width:600px;height:80px"></textarea></form>
+<script>window.sent=0;document.getElementById('t').addEventListener('keydown',e=>{if(e.key==='Enter')window.sent++})</script>`),
+        }),
+      )
+      await pg.goto('https://claude.ai/', { waitUntil: 'domcontentloaded' })
+      await pg.waitForTimeout(700)
+      await pg.focus('#t')
+      await pg.keyboard.insertText('token ' + GH)
+      if (delay) await pg.waitForTimeout(delay)
+      await pg.keyboard.press('Enter')
+      await pg.waitForTimeout(300)
+      const sent = await pg.evaluate(() => window.sent)
+      const ok = sent === 0
+      if (!ok) failed++
+      console.log(`  ${ok ? 'ok  ' : 'FAIL'}  block, Enter ${String(delay).padStart(3)} ms after the secret   reached the site ${sent} time(s)`)
+      await pg.close()
+    }
+  } finally {
+    await sw.evaluate(() => chrome.storage.local.remove('settings'))
+  }
+  return failed
+}
+
 async function main() {
   if (!existsSync(DIST)) {
     console.error('build the extension first: npm run build --workspace @sbr0nch/contextia-extension')
@@ -117,6 +157,7 @@ async function main() {
 
   let failed = 0
   try {
+    failed += await blockRace(ctx) // first: the service worker is awake right after launch
     for (const c of CASES) {
       const pg = await ctx.newPage()
       await pg.route('**/*', (r) =>
@@ -143,7 +184,7 @@ async function main() {
     await rm(profile, { recursive: true, force: true })
   }
 
-  console.log(failed ? `\n${failed} case(s) failed\n` : `\nall ${CASES.length} cases passed\n`)
+  console.log(failed ? `\n${failed} case(s) failed\n` : `\nall ${CASES.length + RACE_DELAYS.length} cases passed\n`)
   process.exit(failed ? 1 : 0)
 }
 
