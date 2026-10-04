@@ -176,7 +176,7 @@ var anthropicKey = {
 };
 
 // packages/engine/src/detectors/openai-key.ts
-var RE6 = /\bsk-(?!ant-)(?:proj-[A-Za-z0-9_-]{20,}|[A-Za-z0-9]{48})\b/g;
+var RE6 = /\bsk-(?!ant-)(?:proj-[A-Za-z0-9_-]{20,}(?!\w)|[A-Za-z0-9]{48}\b)/g;
 var openaiKey = {
   id: "openai_key",
   label: "OpenAI API key",
@@ -521,7 +521,7 @@ var email = {
 };
 
 // packages/engine/src/detectors/gitlab-pat.ts
-var RE13 = /\bglpat-[0-9A-Za-z_-]{20}\b/g;
+var RE13 = /\bglpat-[0-9A-Za-z_-]{20}(?!\w)/g;
 var gitlabPat = {
   id: "gitlab_pat",
   label: "GitLab personal access token",
@@ -557,7 +557,7 @@ var npmToken = {
 };
 
 // packages/engine/src/detectors/sendgrid-key.ts
-var RE15 = /\bSG\.[0-9A-Za-z_-]{22}\.[0-9A-Za-z_-]{43}\b/g;
+var RE15 = /\bSG\.[0-9A-Za-z_-]{22}\.[0-9A-Za-z_-]{43}(?!\w)/g;
 var sendgridKey = {
   id: "sendgrid_key",
   label: "SendGrid API key",
@@ -693,7 +693,7 @@ var linearKey = {
 };
 
 // packages/engine/src/detectors/square-token.ts
-var RE23 = /\bsq0(?:atp|csp)-[0-9A-Za-z_-]{22,}\b/g;
+var RE23 = /\bsq0(?:atp|csp)-[0-9A-Za-z_-]{22,}(?!\w)/g;
 var squareToken = {
   id: "square_token",
   label: "Square access token",
@@ -904,56 +904,56 @@ var indiaAadhaar = {
 };
 
 // packages/engine/src/detectors/generated.ts
-var RE_0 = new RegExp("\\b[0-9a-f]{32}-us\\d{1,2}\\b", "g");
-var RE_1 = new RegExp("\\bkey-[0-9a-zA-Z]{32}\\b", "g");
-var RE_2 = new RegExp("\\bNRAK-[A-Z0-9]{27}\\b", "g");
-var RE_3 = new RegExp("\\bpypi-AgEI[A-Za-z0-9_-]{50,}\\b", "g");
-var RE_4 = new RegExp("\\bdp\\.pt\\.[A-Za-z0-9]{43}\\b", "g");
-var RE_5 = new RegExp("\\bglsa_[A-Za-z0-9]{32}_[a-f0-9]{8}\\b", "g");
-var RE_6 = new RegExp("\\bdapi[0-9a-f]{32}\\b", "g");
-var RE_7 = new RegExp("\\b\\d{8,10}:[A-Za-z0-9_-]{35}\\b", "g");
-var RE_8 = new RegExp("\\bxkeysib-[a-f0-9]{64}-[A-Za-z0-9]{16}\\b", "g");
-var RE_9 = new RegExp("\\bpscale_tkn_[A-Za-z0-9_-]{32,}\\b", "g");
-var RE_10 = new RegExp("\\bsk-or-v1-[0-9a-f]{40,}\\b", "g");
-var RE_11 = new RegExp("\\bgsk_[A-Za-z0-9]{52}\\b", "g");
-var RE_12 = new RegExp("\\bpplx-[A-Za-z0-9]{40,}\\b", "g");
-var RE_13 = new RegExp("\\br8_[A-Za-z0-9]{37}\\b", "g");
-var RE_14 = new RegExp("\\bntn_[0-9A-Za-z]{40,}\\b", "g");
-var RE_15 = new RegExp("\\b[MNO][A-Za-z0-9_-]{23,25}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{27,38}\\b", "g");
-var RE_16 = new RegExp("\\bfigd_[0-9A-Za-z_.-]{40,}\\b", "g");
-var RE_17 = new RegExp("\\bpat[0-9A-Za-z]{14}\\.[0-9A-Za-z_-]{40,}\\b", "g");
-var RE_18 = new RegExp("\\b[A-Za-z0-9]{14}\\.atlasv1\\.[A-Za-z0-9_-]{60,}\\b", "g");
-var RE_19 = new RegExp("\\bsl\\.[A-Za-z0-9_-]{130,}\\b", "g");
-var RE_20 = new RegExp("\\bxai-[A-Za-z0-9]{80}\\b", "g");
-var RE_21 = new RegExp("\\bFLWSECK[_-][0-9A-Za-z-]{20,}\\b", "g");
-var RE_22 = new RegExp("\\brzp_(?:live|test)_[0-9A-Za-z]{14,}\\b", "g");
-var RE_23 = new RegExp("\\bfw_[0-9A-Za-z]{24,}\\b", "g");
-var RE_24 = new RegExp("\\bATATT3x[A-Za-z0-9_=+/.-]{150,}\\b", "g");
-var RE_25 = new RegExp("\\btskey-(?:auth|api|client)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{20,}\\b", "g");
-var RE_26 = new RegExp("\\bre_(?=[A-Za-z0-9_]*\\d)[A-Za-z0-9_]{22,}\\b", "g");
-var RE_27 = new RegExp("\\bhvs\\.[A-Za-z0-9._-]{90,120}\\b", "g");
-var RE_28 = new RegExp("\\bdt0c01\\.[A-Za-z0-9_]{24}\\.[A-Za-z0-9_]{64}\\b", "g");
+var RE_0 = new RegExp("\\b[0-9a-f]{32}-us\\d{1,2}(?!\\w)", "g");
+var RE_1 = new RegExp("\\bkey-[0-9a-zA-Z]{32}(?!\\w)", "g");
+var RE_2 = new RegExp("\\bNRAK-[A-Z0-9]{27}(?!\\w)", "g");
+var RE_3 = new RegExp("\\bpypi-AgEI[A-Za-z0-9_-]{50,}(?!\\w)", "g");
+var RE_4 = new RegExp("\\bdp\\.pt\\.[A-Za-z0-9]{43}(?!\\w)", "g");
+var RE_5 = new RegExp("\\bglsa_[A-Za-z0-9]{32}_[a-f0-9]{8}(?!\\w)", "g");
+var RE_6 = new RegExp("\\bdapi[0-9a-f]{32}(?!\\w)", "g");
+var RE_7 = new RegExp("\\b\\d{8,10}:[A-Za-z0-9_-]{35}(?!\\w)", "g");
+var RE_8 = new RegExp("\\bxkeysib-[a-f0-9]{64}-[A-Za-z0-9]{16}(?!\\w)", "g");
+var RE_9 = new RegExp("\\bpscale_tkn_[A-Za-z0-9_-]{32,}(?!\\w)", "g");
+var RE_10 = new RegExp("\\bsk-or-v1-[0-9a-f]{40,}(?!\\w)", "g");
+var RE_11 = new RegExp("\\bgsk_[A-Za-z0-9]{52}(?!\\w)", "g");
+var RE_12 = new RegExp("\\bpplx-[A-Za-z0-9]{40,}(?!\\w)", "g");
+var RE_13 = new RegExp("\\br8_[A-Za-z0-9]{37}(?!\\w)", "g");
+var RE_14 = new RegExp("\\bntn_[0-9A-Za-z]{40,}(?!\\w)", "g");
+var RE_15 = new RegExp("\\b[MNO][A-Za-z0-9_-]{23,25}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{27,38}(?!\\w)", "g");
+var RE_16 = new RegExp("\\bfigd_[0-9A-Za-z_.-]{40,}(?!\\w)", "g");
+var RE_17 = new RegExp("\\bpat[0-9A-Za-z]{14}\\.[0-9A-Za-z_-]{40,}(?!\\w)", "g");
+var RE_18 = new RegExp("\\b[A-Za-z0-9]{14}\\.atlasv1\\.[A-Za-z0-9_-]{60,}(?!\\w)", "g");
+var RE_19 = new RegExp("\\bsl\\.[A-Za-z0-9_-]{130,}(?!\\w)", "g");
+var RE_20 = new RegExp("\\bxai-[A-Za-z0-9]{80}(?!\\w)", "g");
+var RE_21 = new RegExp("\\bFLWSECK[_-][0-9A-Za-z-]{20,}(?!\\w)", "g");
+var RE_22 = new RegExp("\\brzp_(?:live|test)_[0-9A-Za-z]{14,}(?!\\w)", "g");
+var RE_23 = new RegExp("\\bfw_[0-9A-Za-z]{24,}(?!\\w)", "g");
+var RE_24 = new RegExp("\\bATATT3x[A-Za-z0-9_=+/.-]{150,}(?!\\w)", "g");
+var RE_25 = new RegExp("\\btskey-(?:auth|api|client)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{20,}(?!\\w)", "g");
+var RE_26 = new RegExp("\\bre_(?=[A-Za-z0-9_]*\\d)[A-Za-z0-9_]{22,}(?!\\w)", "g");
+var RE_27 = new RegExp("\\bhvs\\.[A-Za-z0-9._-]{90,120}(?!\\w)", "g");
+var RE_28 = new RegExp("\\bdt0c01\\.[A-Za-z0-9_]{24}\\.[A-Za-z0-9_]{64}(?!\\w)", "g");
 var RE_29 = new RegExp("\\btfp_[A-Za-z0-9._=-]{59}", "g");
-var RE_30 = new RegExp("\\bpnu_[A-Za-z0-9_]{36}\\b", "g");
-var RE_31 = new RegExp("\\brubygems_[a-f0-9_]{48}\\b", "g");
-var RE_32 = new RegExp("\\bCLOJARS_[A-Za-z0-9_]{60}\\b", "g");
+var RE_30 = new RegExp("\\bpnu_[A-Za-z0-9_]{36}(?!\\w)", "g");
+var RE_31 = new RegExp("\\brubygems_[a-f0-9_]{48}(?!\\w)", "g");
+var RE_32 = new RegExp("\\bCLOJARS_[A-Za-z0-9_]{60}(?!\\w)", "g");
 var RE_33 = new RegExp("\\bduffel_(?:test|live)_[A-Za-z0-9._=-]{43}", "g");
 var RE_34 = new RegExp("\\bfio-u-[A-Za-z0-9._=-]{64}", "g");
-var RE_35 = new RegExp("\\bshippo_(?:live|test)_[a-fA-F0-9_]{40}\\b", "g");
-var RE_36 = new RegExp("\\bEZAK[A-Za-z0-9_]{54}\\b", "g");
-var RE_37 = new RegExp("\\bLTAI[A-Za-z0-9_]{20}\\b", "g");
-var RE_38 = new RegExp("\\bAGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L_]{58}\\b", "g");
-var RE_39 = new RegExp("\\brdme_[a-z0-9_]{70}\\b", "g");
-var RE_40 = new RegExp("\\bs-s4t2(?:ud|af)-[a-f0-9_]{64}\\b", "g");
-var RE_41 = new RegExp("\\bEAA[MC][A-Za-z0-9_]{100,}\\b", "g");
-var RE_42 = new RegExp("\\bsntryu_[a-f0-9_]{64}\\b", "g");
-var RE_43 = new RegExp("\\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}\\b", "g");
-var RE_44 = new RegExp("\\b9\\d{2}-[5-9]\\d-\\d{4}\\b", "g");
-var RE_45 = new RegExp("\\b0x[a-fA-F0-9]{40}\\b", "g");
-var RE_46 = new RegExp("\\bbc1[a-z0-9]{25,39}\\b", "g");
-var RE_47 = new RegExp("\\+[1-9]\\d{7,14}\\b", "g");
-var RE_48 = new RegExp("\\b[A-Z]{3}[ABCFGHLJPT][A-Z]\\d{4}[A-Z]\\b", "g");
-var RE_49 = new RegExp("\\b[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\\d{6}[A-D]\\b", "g");
+var RE_35 = new RegExp("\\bshippo_(?:live|test)_[a-fA-F0-9_]{40}(?!\\w)", "g");
+var RE_36 = new RegExp("\\bEZAK[A-Za-z0-9_]{54}(?!\\w)", "g");
+var RE_37 = new RegExp("\\bLTAI[A-Za-z0-9_]{20}(?!\\w)", "g");
+var RE_38 = new RegExp("\\bAGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L_]{58}(?!\\w)", "g");
+var RE_39 = new RegExp("\\brdme_[a-z0-9_]{70}(?!\\w)", "g");
+var RE_40 = new RegExp("\\bs-s4t2(?:ud|af)-[a-f0-9_]{64}(?!\\w)", "g");
+var RE_41 = new RegExp("\\bEAA[MC][A-Za-z0-9_]{100,}(?!\\w)", "g");
+var RE_42 = new RegExp("\\bsntryu_[a-f0-9_]{64}(?!\\w)", "g");
+var RE_43 = new RegExp("\\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}(?!\\w)", "g");
+var RE_44 = new RegExp("\\b9\\d{2}-[5-9]\\d-\\d{4}(?!\\w)", "g");
+var RE_45 = new RegExp("\\b0x[a-fA-F0-9]{40}(?!\\w)", "g");
+var RE_46 = new RegExp("\\bbc1[a-z0-9]{25,39}(?!\\w)", "g");
+var RE_47 = new RegExp("\\+[1-9]\\d{7,14}(?!\\w)", "g");
+var RE_48 = new RegExp("\\b[A-Z]{3}[ABCFGHLJPT][A-Z]\\d{4}[A-Z](?!\\w)", "g");
+var RE_49 = new RegExp("\\b[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\\d{6}[A-D](?!\\w)", "g");
 var generated = [
   {
     id: "mailchimp_key",

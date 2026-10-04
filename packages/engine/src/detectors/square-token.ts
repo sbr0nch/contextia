@@ -2,7 +2,9 @@ import type { Detector } from '../types.js'
 import { matchAll } from './_util.js'
 
 // Square access (sq0atp-) and OAuth (sq0csp-) tokens.
-const RE = /\bsq0(?:atp|csp)-[0-9A-Za-z_-]{22,}\b/g
+// (?!\w) rather than \b after a class that holds "-": \b needs a word character next, so a
+// token ending in "-" was not matched whole. Same as \b after a letter or a digit.
+const RE = /\bsq0(?:atp|csp)-[0-9A-Za-z_-]{22,}(?!\w)/g
 
 export const squareToken: Detector = {
   id: 'square_token',

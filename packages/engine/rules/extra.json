@@ -3,7 +3,7 @@
     "id": "mailchimp_key",
     "label": "Mailchimp API key",
     "severity": "critical",
-    "pattern": "\\b[0-9a-f]{32}-us\\d{1,2}\\b",
+    "pattern": "\\b[0-9a-f]{32}-us\\d{1,2}(?!\\w)",
     "positives": ["{a:32}-us1", "{f:32}-us20"],
     "negatives": ["abcd-us1", "{a:32}-usX", "not a mailchimp key"]
   },
@@ -11,7 +11,7 @@
     "id": "mailgun_key",
     "label": "Mailgun API key",
     "severity": "critical",
-    "pattern": "\\bkey-[0-9a-zA-Z]{32}\\b",
+    "pattern": "\\bkey-[0-9a-zA-Z]{32}(?!\\w)",
     "positives": ["key-{a:32}", "key-{A:32}"],
     "negatives": ["key-tooshort", "a keyword here", "key-{a:31}"]
   },
@@ -19,7 +19,7 @@
     "id": "newrelic_key",
     "label": "New Relic user key",
     "severity": "critical",
-    "pattern": "\\bNRAK-[A-Z0-9]{27}\\b",
+    "pattern": "\\bNRAK-[A-Z0-9]{27}(?!\\w)",
     "positives": ["NRAK-{A:27}", "NRAK-{0:27}"],
     "negatives": ["NRAK-short", "nrak-{A:27}", "just some text"]
   },
@@ -27,7 +27,7 @@
     "id": "pypi_token",
     "label": "PyPI upload token",
     "severity": "critical",
-    "pattern": "\\bpypi-AgEI[A-Za-z0-9_-]{50,}\\b",
+    "pattern": "\\bpypi-AgEI[A-Za-z0-9_-]{50,}(?!\\w)",
     "positives": ["pypi-AgEI{a:50}", "pypi-AgEI{A:60}"],
     "negatives": ["pypi-short", "pypi-XXXX{a:50}", "a pypi package"]
   },
@@ -35,7 +35,7 @@
     "id": "doppler_token",
     "label": "Doppler personal token",
     "severity": "critical",
-    "pattern": "\\bdp\\.pt\\.[A-Za-z0-9]{43}\\b",
+    "pattern": "\\bdp\\.pt\\.[A-Za-z0-9]{43}(?!\\w)",
     "positives": ["dp.pt.{a:43}", "dp.pt.{A:43}"],
     "negatives": ["dp.pt.short", "dp.sa.{a:43}", "doppler config"]
   },
@@ -43,7 +43,7 @@
     "id": "grafana_token",
     "label": "Grafana service account token",
     "severity": "critical",
-    "pattern": "\\bglsa_[A-Za-z0-9]{32}_[a-f0-9]{8}\\b",
+    "pattern": "\\bglsa_[A-Za-z0-9]{32}_[a-f0-9]{8}(?!\\w)",
     "positives": ["glsa_{a:32}_{0:8}", "glsa_{A:32}_{f:8}"],
     "negatives": ["glsa_short", "glsa_{a:32}_xyz", "grafana dashboard"]
   },
@@ -51,7 +51,7 @@
     "id": "databricks_token",
     "label": "Databricks token",
     "severity": "critical",
-    "pattern": "\\bdapi[0-9a-f]{32}\\b",
+    "pattern": "\\bdapi[0-9a-f]{32}(?!\\w)",
     "positives": ["dapi{a:32}", "dapi{0:32}"],
     "negatives": ["dapishort", "dapi{g:32}", "a databricks notebook"]
   },
@@ -59,7 +59,7 @@
     "id": "telegram_bot_token",
     "label": "Telegram bot token",
     "severity": "critical",
-    "pattern": "\\b\\d{8,10}:[A-Za-z0-9_-]{35}\\b",
+    "pattern": "\\b\\d{8,10}:[A-Za-z0-9_-]{35}(?!\\w)",
     "positives": ["{1:9}:{a:35}", "{0:10}:{A:35}"],
     "negatives": ["123:abc", "{1:9}:{a:34}", "a telegram message"]
   },
@@ -67,7 +67,7 @@
     "id": "brevo_key",
     "label": "Brevo (Sendinblue) API key",
     "severity": "critical",
-    "pattern": "\\bxkeysib-[a-f0-9]{64}-[A-Za-z0-9]{16}\\b",
+    "pattern": "\\bxkeysib-[a-f0-9]{64}-[A-Za-z0-9]{16}(?!\\w)",
     "positives": ["xkeysib-{a:64}-{A:16}", "xkeysib-{0:64}-{b:16}"],
     "negatives": ["xkeysib-short", "xkeysib-{a:64}-short", "a brevo email"]
   },
@@ -75,7 +75,7 @@
     "id": "planetscale_token",
     "label": "PlanetScale password token",
     "severity": "critical",
-    "pattern": "\\bpscale_tkn_[A-Za-z0-9_-]{32,}\\b",
+    "pattern": "\\bpscale_tkn_[A-Za-z0-9_-]{32,}(?!\\w)",
     "positives": ["pscale_tkn_{a:32}", "pscale_tkn_{A:40}"],
     "negatives": ["pscale_tkn_short", "pscale_pw_{a:32}", "a planetscale db"]
   },
@@ -83,7 +83,7 @@
     "id": "openrouter_key",
     "label": "OpenRouter API key",
     "severity": "critical",
-    "pattern": "\\bsk-or-v1-[0-9a-f]{40,}\\b",
+    "pattern": "\\bsk-or-v1-[0-9a-f]{40,}(?!\\w)",
     "positives": ["sk-or-v1-{a:40}", "sk-or-v1-{0:50}"],
     "negatives": ["sk-or-v1-short", "sk-or-v2-{a:40}", "an openrouter model"]
   },
@@ -91,7 +91,7 @@
     "id": "groq_key",
     "label": "Groq API key",
     "severity": "critical",
-    "pattern": "\\bgsk_[A-Za-z0-9]{52}\\b",
+    "pattern": "\\bgsk_[A-Za-z0-9]{52}(?!\\w)",
     "positives": ["gsk_{a:52}", "gsk_{A:52}"],
     "negatives": ["gsk_short", "gsk_{a:51}", "a groq request"]
   },
@@ -99,7 +99,7 @@
     "id": "perplexity_key",
     "label": "Perplexity API key",
     "severity": "critical",
-    "pattern": "\\bpplx-[A-Za-z0-9]{40,}\\b",
+    "pattern": "\\bpplx-[A-Za-z0-9]{40,}(?!\\w)",
     "positives": ["pplx-{a:48}", "pplx-{A:40}"],
     "negatives": ["pplx-short", "pplx-{a:39}", "a perplexity search"]
   },
@@ -107,7 +107,7 @@
     "id": "replicate_token",
     "label": "Replicate API token",
     "severity": "critical",
-    "pattern": "\\br8_[A-Za-z0-9]{37}\\b",
+    "pattern": "\\br8_[A-Za-z0-9]{37}(?!\\w)",
     "positives": ["r8_{a:37}", "r8_{A:37}"],
     "negatives": ["r8_short", "r8_{a:36}", "a replicate model"]
   },
@@ -115,7 +115,7 @@
     "id": "notion_token",
     "label": "Notion integration token",
     "severity": "critical",
-    "pattern": "\\bntn_[0-9A-Za-z]{40,}\\b",
+    "pattern": "\\bntn_[0-9A-Za-z]{40,}(?!\\w)",
     "positives": ["ntn_{a:46}", "ntn_{A:40}"],
     "negatives": ["ntn_short", "ntn_{a:39}", "a notion page"]
   },
@@ -123,7 +123,7 @@
     "id": "discord_bot_token",
     "label": "Discord bot token",
     "severity": "critical",
-    "pattern": "\\b[MNO][A-Za-z0-9_-]{23,25}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{27,38}\\b",
+    "pattern": "\\b[MNO][A-Za-z0-9_-]{23,25}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{27,38}(?!\\w)",
     "positives": ["M{a:23}.{a:6}.{a:27}", "N{A:25}.{A:6}.{A:38}"],
     "negatives": ["M{a:10}.{a:6}.{a:27}", "X{a:23}.{a:6}.{a:27}", "a discord server"]
   },
@@ -131,7 +131,7 @@
     "id": "figma_token",
     "label": "Figma personal access token",
     "severity": "critical",
-    "pattern": "\\bfigd_[0-9A-Za-z_.-]{40,}\\b",
+    "pattern": "\\bfigd_[0-9A-Za-z_.-]{40,}(?!\\w)",
     "positives": ["figd_{a:20}.{b:20}", "figd_{A:24}.{B:24}"],
     "negatives": ["figd_short", "figx_{a:40}", "a figma file"]
   },
@@ -139,7 +139,7 @@
     "id": "airtable_pat",
     "label": "Airtable personal access token",
     "severity": "critical",
-    "pattern": "\\bpat[0-9A-Za-z]{14}\\.[0-9A-Za-z_-]{40,}\\b",
+    "pattern": "\\bpat[0-9A-Za-z]{14}\\.[0-9A-Za-z_-]{40,}(?!\\w)",
     "positives": ["pat{a:14}.{b:20}-{c:20}", "pat{A:14}.{0:20}_{1:20}"],
     "negatives": ["pat{a:14}.short", "patshort", "a patch file"]
   },
@@ -147,7 +147,7 @@
     "id": "terraform_cloud_token",
     "label": "Terraform Cloud API token",
     "severity": "critical",
-    "pattern": "\\b[A-Za-z0-9]{14}\\.atlasv1\\.[A-Za-z0-9_-]{60,}\\b",
+    "pattern": "\\b[A-Za-z0-9]{14}\\.atlasv1\\.[A-Za-z0-9_-]{60,}(?!\\w)",
     "positives": ["{a:14}.atlasv1.{b:60}", "{A:14}.atlasv1.{0:70}"],
     "negatives": ["{a:14}.atlasv2.{b:60}", "short.atlasv1.short", "a terraform plan"]
   },
@@ -155,7 +155,7 @@
     "id": "dropbox_token",
     "label": "Dropbox access token",
     "severity": "critical",
-    "pattern": "\\bsl\\.[A-Za-z0-9_-]{130,}\\b",
+    "pattern": "\\bsl\\.[A-Za-z0-9_-]{130,}(?!\\w)",
     "positives": ["sl.{a:130}", "sl.{A:140}"],
     "negatives": ["sl.short", "sl_{a:130}", "a slack message"]
   },
@@ -163,7 +163,7 @@
     "id": "xai_key",
     "label": "xAI (Grok) API key",
     "severity": "critical",
-    "pattern": "\\bxai-[A-Za-z0-9]{80}\\b",
+    "pattern": "\\bxai-[A-Za-z0-9]{80}(?!\\w)",
     "positives": ["xai-{a:80}", "xai-{A:80}"],
     "negatives": ["xai-short", "xai-{a:79}", "an xai model"]
   },
@@ -171,7 +171,7 @@
     "id": "flutterwave_secret",
     "label": "Flutterwave secret key",
     "severity": "critical",
-    "pattern": "\\bFLWSECK[_-][0-9A-Za-z-]{20,}\\b",
+    "pattern": "\\bFLWSECK[_-][0-9A-Za-z-]{20,}(?!\\w)",
     "positives": ["FLWSECK-{a:32}", "FLWSECK_TEST-{A:24}"],
     "negatives": ["FLWSECK-short", "FLWPUBK-{a:32}", "a flutterwave payment"]
   },
@@ -179,7 +179,7 @@
     "id": "razorpay_key",
     "label": "Razorpay API key",
     "severity": "critical",
-    "pattern": "\\brzp_(?:live|test)_[0-9A-Za-z]{14,}\\b",
+    "pattern": "\\brzp_(?:live|test)_[0-9A-Za-z]{14,}(?!\\w)",
     "positives": ["rzp_live_{a:14}", "rzp_test_{A:18}"],
     "negatives": ["rzp_live_short", "rzp_prod_{a:14}", "a razorpay order"]
   },
@@ -187,7 +187,7 @@
     "id": "fireworks_key",
     "label": "Fireworks AI API key",
     "severity": "critical",
-    "pattern": "\\bfw_[0-9A-Za-z]{24,}\\b",
+    "pattern": "\\bfw_[0-9A-Za-z]{24,}(?!\\w)",
     "positives": ["fw_{a:24}", "fw_{A:30}"],
     "negatives": ["fw_short", "fwd_{a:24}", "a firmware update"]
   },
@@ -195,7 +195,7 @@
     "id": "atlassian_token",
     "label": "Atlassian API token",
     "severity": "critical",
-    "pattern": "\\bATATT3x[A-Za-z0-9_=+/.-]{150,}\\b",
+    "pattern": "\\bATATT3x[A-Za-z0-9_=+/.-]{150,}(?!\\w)",
     "positives": ["ATATT3xFfGF0{a:150}", "ATATT3x{A:180}"],
     "negatives": ["ATATT3x_short", "ATATTshort", "an atlassian ticket"]
   },
@@ -203,7 +203,7 @@
     "id": "tailscale_key",
     "label": "Tailscale auth key",
     "severity": "critical",
-    "pattern": "\\btskey-(?:auth|api|client)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{20,}\\b",
+    "pattern": "\\btskey-(?:auth|api|client)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{20,}(?!\\w)",
     "positives": ["tskey-auth-{a:12}-{b:40}", "tskey-api-{A:16}-{0:30}"],
     "negatives": ["tskey-auth-short", "tskey-xxxx-{a:12}-{b:40}", "a tailscale node"]
   },
@@ -211,7 +211,7 @@
     "id": "resend_key",
     "label": "Resend API key",
     "severity": "critical",
-    "pattern": "\\bre_(?=[A-Za-z0-9_]*\\d)[A-Za-z0-9_]{22,}\\b",
+    "pattern": "\\bre_(?=[A-Za-z0-9_]*\\d)[A-Za-z0-9_]{22,}(?!\\w)",
     "positives": ["re_{a:10}1{a:12}", "re_{b:12}2{b:12}"],
     "negatives": ["re_render_component_wrapper_factory", "re_short", "a resend email"]
   },
@@ -219,7 +219,7 @@
     "id": "hashicorp_vault_token",
     "label": "HashiCorp Vault service token",
     "severity": "critical",
-    "pattern": "\\bhvs\\.[A-Za-z0-9._-]{90,120}\\b",
+    "pattern": "\\bhvs\\.[A-Za-z0-9._-]{90,120}(?!\\w)",
     "positives": ["hvs.{a:44}.{a:45}", "hvs.{b:54}.{b:55}"],
     "negatives": ["hvs.short", "hvx.{a:90}", "a vault token"]
   },
@@ -227,7 +227,7 @@
     "id": "dynatrace_token",
     "label": "Dynatrace API token",
     "severity": "critical",
-    "pattern": "\\bdt0c01\\.[A-Za-z0-9_]{24}\\.[A-Za-z0-9_]{64}\\b",
+    "pattern": "\\bdt0c01\\.[A-Za-z0-9_]{24}\\.[A-Za-z0-9_]{64}(?!\\w)",
     "positives": ["dt0c01.{a:11}_{a:12}.{b:31}_{b:32}", "dt0c01.{c:11}_{c:12}.{d:31}_{d:32}"],
     "negatives": ["dt0c01.{a:24}.short", "dt0c02.{a:11}_{a:12}.{b:31}_{b:32}", "a dynatrace token"]
   },
@@ -243,7 +243,7 @@
     "id": "prefect_token",
     "label": "Prefect API token",
     "severity": "critical",
-    "pattern": "\\bpnu_[A-Za-z0-9_]{36}\\b",
+    "pattern": "\\bpnu_[A-Za-z0-9_]{36}(?!\\w)",
     "positives": ["pnu_{a:17}_{a:18}", "pnu_{b:17}_{b:18}"],
     "negatives": ["pnu_short", "pnx_{a:36}", "a prefect flow"]
   },
@@ -251,7 +251,7 @@
     "id": "rubygems_token",
     "label": "RubyGems API token",
     "severity": "critical",
-    "pattern": "\\brubygems_[a-f0-9_]{48}\\b",
+    "pattern": "\\brubygems_[a-f0-9_]{48}(?!\\w)",
     "positives": ["rubygems_{a:23}_{a:24}", "rubygems_{b:23}_{b:24}"],
     "negatives": ["rubygems_short", "rubygemx_{a:48}", "a ruby gem"]
   },
@@ -259,7 +259,7 @@
     "id": "clojars_token",
     "label": "Clojars API token",
     "severity": "critical",
-    "pattern": "\\bCLOJARS_[A-Za-z0-9_]{60}\\b",
+    "pattern": "\\bCLOJARS_[A-Za-z0-9_]{60}(?!\\w)",
     "positives": ["CLOJARS_{a:29}_{a:30}", "CLOJARS_{b:29}_{b:30}"],
     "negatives": ["CLOJARS_short", "CLOJARX_{a:60}", "a clojure lib"]
   },
@@ -283,7 +283,7 @@
     "id": "shippo_token",
     "label": "Shippo API token",
     "severity": "critical",
-    "pattern": "\\bshippo_(?:live|test)_[a-fA-F0-9_]{40}\\b",
+    "pattern": "\\bshippo_(?:live|test)_[a-fA-F0-9_]{40}(?!\\w)",
     "positives": ["shippo_live_{a:19}_{a:20}", "shippo_test_{b:19}_{b:20}"],
     "negatives": ["shippo_live_short", "shippo_prod_{a:40}", "a shippo label"]
   },
@@ -291,7 +291,7 @@
     "id": "easypost_token",
     "label": "EasyPost API token",
     "severity": "critical",
-    "pattern": "\\bEZAK[A-Za-z0-9_]{54}\\b",
+    "pattern": "\\bEZAK[A-Za-z0-9_]{54}(?!\\w)",
     "positives": ["EZAK{a:26}_{a:27}", "EZAK{b:26}_{b:27}"],
     "negatives": ["EZAKshort", "EZAX{a:54}", "an easypost shipment"]
   },
@@ -299,7 +299,7 @@
     "id": "alibaba_access_key",
     "label": "Alibaba Cloud AccessKey ID",
     "severity": "critical",
-    "pattern": "\\bLTAI[A-Za-z0-9_]{20}\\b",
+    "pattern": "\\bLTAI[A-Za-z0-9_]{20}(?!\\w)",
     "positives": ["LTAI{a:9}_{a:10}", "LTAI{b:9}_{b:10}"],
     "negatives": ["LTAIshort", "LTAX{a:20}", "an alibaba account"]
   },
@@ -307,7 +307,7 @@
     "id": "age_secret_key",
     "label": "age secret key",
     "severity": "critical",
-    "pattern": "\\bAGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L_]{58}\\b",
+    "pattern": "\\bAGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L_]{58}(?!\\w)",
     "positives": ["AGE-SECRET-KEY-1{Q:28}_{Q:29}", "AGE-SECRET-KEY-1{A:28}_{A:29}"],
     "negatives": ["AGE-SECRET-KEY-1{Q:57}", "AGE-PUBLIC-KEY-1{Q:58}", "an age identity"]
   },
@@ -315,7 +315,7 @@
     "id": "readme_token",
     "label": "ReadMe API token",
     "severity": "critical",
-    "pattern": "\\brdme_[a-z0-9_]{70}\\b",
+    "pattern": "\\brdme_[a-z0-9_]{70}(?!\\w)",
     "positives": ["rdme_{a:34}_{a:35}", "rdme_{b:34}_{b:35}"],
     "negatives": ["rdme_short", "rdmx_{a:70}", "a readme file"]
   },
@@ -323,7 +323,7 @@
     "id": "intra42_secret",
     "label": "Intra42 client secret",
     "severity": "critical",
-    "pattern": "\\bs-s4t2(?:ud|af)-[a-f0-9_]{64}\\b",
+    "pattern": "\\bs-s4t2(?:ud|af)-[a-f0-9_]{64}(?!\\w)",
     "positives": ["s-s4t2ud-{a:31}_{a:32}", "s-s4t2af-{b:31}_{b:32}"],
     "negatives": ["s-s4t2ud-short", "s-s4t2xx-{a:64}", "an intra42 app"]
   },
@@ -331,7 +331,7 @@
     "id": "facebook_token",
     "label": "Facebook access token",
     "severity": "critical",
-    "pattern": "\\bEAA[MC][A-Za-z0-9_]{100,}\\b",
+    "pattern": "\\bEAA[MC][A-Za-z0-9_]{100,}(?!\\w)",
     "positives": ["EAAM{a:50}_{a:50}", "EAAC{b:55}_{b:55}"],
     "negatives": ["EAAM{a:99}", "EAAX{a:100}", "a facebook post"]
   },
@@ -339,7 +339,7 @@
     "id": "sentry_user_token",
     "label": "Sentry user token",
     "severity": "critical",
-    "pattern": "\\bsntryu_[a-f0-9_]{64}\\b",
+    "pattern": "\\bsntryu_[a-f0-9_]{64}(?!\\w)",
     "positives": ["sntryu_{a:31}_{a:32}", "sntryu_{b:31}_{b:32}"],
     "negatives": ["sntryu_short", "sntryx_{a:64}", "a sentry issue"]
   },
@@ -347,7 +347,7 @@
     "id": "bitcoin_wif_key",
     "label": "Bitcoin private key (WIF)",
     "severity": "critical",
-    "pattern": "\\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}\\b",
+    "pattern": "\\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}(?!\\w)",
     "positives": ["5{a:50}", "K{b:51}"],
     "negatives": ["5{a:49}", "0{a:50}", "a bitcoin wallet"]
   },
@@ -355,7 +355,7 @@
     "id": "us_itin",
     "label": "US Individual Taxpayer Identification Number",
     "severity": "warning",
-    "pattern": "\\b9\\d{2}-[5-9]\\d-\\d{4}\\b",
+    "pattern": "\\b9\\d{2}-[5-9]\\d-\\d{4}(?!\\w)",
     "positives": ["912-70-1234", "999-95-6789"],
     "negatives": ["912-40-1234", "123-70-1234", "an itin value"]
   },
@@ -363,7 +363,7 @@
     "id": "ethereum_address",
     "label": "Ethereum address",
     "severity": "warning",
-    "pattern": "\\b0x[a-fA-F0-9]{40}\\b",
+    "pattern": "\\b0x[a-fA-F0-9]{40}(?!\\w)",
     "positives": ["0x{a:40}", "0x{A:40}"],
     "negatives": ["0x{a:39}", "0x{g:40}", "a wallet address"]
   },
@@ -371,7 +371,7 @@
     "id": "bitcoin_address",
     "label": "Bitcoin address (bech32)",
     "severity": "warning",
-    "pattern": "\\bbc1[a-z0-9]{25,39}\\b",
+    "pattern": "\\bbc1[a-z0-9]{25,39}(?!\\w)",
     "positives": ["bc1{a:30}", "bc1{q:25}"],
     "negatives": ["bc1short", "bc2{a:30}", "a bitcoin address"]
   },
@@ -379,7 +379,7 @@
     "id": "phone_e164",
     "label": "Phone number (E.164)",
     "severity": "warning",
-    "pattern": "\\+[1-9]\\d{7,14}\\b",
+    "pattern": "\\+[1-9]\\d{7,14}(?!\\w)",
     "positives": ["+14155552671", "+919876543210"],
     "negatives": ["+0123456789", "4155552671", "call us anytime"]
   },
@@ -387,7 +387,7 @@
     "id": "india_pan",
     "label": "India PAN",
     "severity": "warning",
-    "pattern": "\\b[A-Z]{3}[ABCFGHLJPT][A-Z]\\d{4}[A-Z]\\b",
+    "pattern": "\\b[A-Z]{3}[ABCFGHLJPT][A-Z]\\d{4}[A-Z](?!\\w)",
     "positives": ["ABCPE1234F", "AAAPA0000A"],
     "negatives": ["ABCDE1234F", "ABCPE12345", "a pan card"]
   },
@@ -395,7 +395,7 @@
     "id": "uk_nino",
     "label": "UK National Insurance number",
     "severity": "warning",
-    "pattern": "\\b[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\\d{6}[A-D]\\b",
+    "pattern": "\\b[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\\d{6}[A-D](?!\\w)",
     "positives": ["AB123456C", "JG567890A"],
     "negatives": ["DA123456C", "AB123456E", "a nino value"]
   }

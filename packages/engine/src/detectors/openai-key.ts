@@ -3,7 +3,9 @@ import { matchAll } from './_util.js'
 
 // Precise: project keys (sk-proj-…) or the legacy 48-char form. The (?!ant-)
 // lookahead keeps it from swallowing Anthropic keys; bare short sk- is ignored.
-const RE = /\bsk-(?!ant-)(?:proj-[A-Za-z0-9_-]{20,}|[A-Za-z0-9]{48})\b/g
+// (?!\w) rather than \b after a class that holds "-": \b needs a word character next, so a
+// token ending in "-" was not matched whole. Same as \b after a letter or a digit.
+const RE = /\bsk-(?!ant-)(?:proj-[A-Za-z0-9_-]{20,}(?!\w)|[A-Za-z0-9]{48}\b)/g
 
 export const openaiKey: Detector = {
   id: 'openai_key',

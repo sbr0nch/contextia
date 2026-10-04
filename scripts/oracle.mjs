@@ -27,6 +27,7 @@ const CLI = join(root, 'packages/cli/dist/cli.js')
 const args = process.argv.slice(2)
 const val = (n, d) => (args.includes(n) ? args[args.indexOf(n) + 1] : d)
 const DS = val('--detect-secrets', 'detect-secrets')
+const SKIP_FP = args.includes('--skip-fp')
 const FP_DIR = resolve(val('--fp-dir', join(root, 'node_modules')))
 
 let seed = 20261004
@@ -40,7 +41,7 @@ const ALNUM = AZ + az + D, B32 = AZ + '234567', URLSAFE = ALNUM + '_-'
 const TYPES = {
   'AWS access key id': () => 'AKIA' + str(B32, 16),
   'GitHub personal token': () => 'ghp_' + str(ALNUM, 36),
-  'GitHub fine-grained token': () => 'github_pat_' + str(ALNUM + '_', 22) + '_' + str(ALNUM, 59),
+  'GitHub fine-grained token': () => 'github_pat_' + str(ALNUM, 22) + '_' + str(ALNUM, 59), // 22 + 59, as documented
   'GitLab personal token': () => 'glpat-' + str(ALNUM + '_-', 20),
   'Slack bot token': () => `xoxb-${str(D, 12)}-${str(D, 13)}-${str(ALNUM, 24)}`,
   'Stripe live secret key': () => 'sk_live_' + str(ALNUM, 24),
@@ -104,6 +105,16 @@ for (const p of planted) {
   if (f(dsFiles)) r.ds_patterns++
   if (f(dsAllFiles)) r.ds_default++
 }
+const byCtx = {}
+for (const p of planted) {
+  const f = (set) => [...set].some((x) => x.startsWith(p.dir + '/'))
+  const r = (byCtx[p.ctx] ??= { n: 0, contextia: 0, ds_patterns: 0, ds_default: 0 })
+  r.n++
+  if (f(oursFiles)) r.contextia++
+  if (f(dsFiles)) r.ds_patterns++
+  if (f(dsAllFiles)) r.ds_default++
+}
+const misses = planted.filter((p) => ![...oursFiles].some((x) => x.startsWith(p.dir + '/')))
 const tot = { n: 0, contextia: 0, ds_patterns: 0, ds_default: 0 }
 console.log(`\nRecall: files with one planted random secret that the tool flagged (${PER * CONTEXTS.length} per type)\n`)
 console.log('type'.padEnd(28), 'Contextia'.padStart(10), 'detect-secrets (patterns)'.padStart(27), 'detect-secrets (default)'.padStart(26))
@@ -113,6 +124,13 @@ for (const [type, r] of Object.entries(rows)) {
 }
 const pct = (a) => ((100 * a) / tot.n).toFixed(1) + '%'
 console.log('ALL'.padEnd(28), `${tot.contextia}/${tot.n} ${pct(tot.contextia)}`.padStart(10), `${tot.ds_patterns}/${tot.n} ${pct(tot.ds_patterns)}`.padStart(27), `${tot.ds_default}/${tot.n} ${pct(tot.ds_default)}`.padStart(26))
+
+console.log('\nBy context (all types together)\n')
+for (const [ctx, r] of Object.entries(byCtx)) console.log(ctx.padEnd(28), `${r.contextia}/${r.n}`.padStart(10), `${r.ds_patterns}/${r.n}`.padStart(27), `${r.ds_default}/${r.n}`.padStart(26))
+if (misses.length) {
+  console.log('\nSecrets Contextia did not flag:')
+  for (const m of misses) console.log(`  ${m.type} in a ${m.ctx} file`)
+}
 
 // misses by Contextia that the other tool saw, and the reverse: the actionable part
 const missedByUs = {}, missedByThem = {}
@@ -124,8 +142,11 @@ for (const p of planted) {
 console.log('\nContextia missed, detect-secrets (default) caught:', JSON.stringify(missedByUs))
 console.log('detect-secrets (default) missed, Contextia caught:', JSON.stringify(missedByThem))
 
+if (SKIP_FP) { rmSync(box, { recursive: true, force: true }); process.exit(0) }
 console.log(`\nFalse positives on third-party code: ${FP_DIR}`)
-const fpOurs = ours(FP_DIR), fpDs = theirs(FP_DIR, PATTERN_ONLY), fpDsAll = theirs(FP_DIR)
+// node_modules/.bin links the workspace's own CLI, whose bundle carries every detector's fixtures
+const foreign = (list) => list.filter((f) => !f.includes('/.bin/'))
+const fpOurs = foreign(ours(FP_DIR)), fpDs = foreign(theirs(FP_DIR, PATTERN_ONLY)), fpDsAll = foreign(theirs(FP_DIR))
 console.log(`  Contextia (default detectors)         ${fpOurs.length} findings in ${new Set(fpOurs).size} files`)
 console.log(`  detect-secrets (pattern plugins only) ${fpDs.length} findings in ${new Set(fpDs).size} files`)
 console.log(`  detect-secrets (default plugins)      ${fpDsAll.length} findings in ${new Set(fpDsAll).size} files`)
