@@ -213,66 +213,67 @@ e' una risposta valida.
 
 | Figura | Giudizio | La prova | Cosa manca per alzarlo |
 |---|---|---|---|
-| **CEO / owner** | rosso oggi, giallo dopo il rilascio | la 2.0.4 e' uscita con la CI rossa; chi usa il proxy con un agente (tool_result, Responses) non era protetto in 9 forme su 13. Il difetto e' presente da sempre (D4 in tutte le 10 release) | rilascio di una nuova versione; avviso agli utenti del proxy; non pubblicare i numeri prima |
-| **CTO / architetto** | giallo | zero dipendenze runtime; 1 solo autore (21 commit, tutti `sbr0nch`); `proxy.ts` e' il punto singolo di guasto per chi lo usa; la scansione a finestre raddoppia il lavoro sui file oltre 1 MB; Stryker non funziona con TypeScript 7 | un secondo manutentore; mutation testing in CI (richiede una versione compatibile) |
-| **CISO / sicurezza** | giallo | SECURITY.md esiste con un canale privato e una promessa di risposta "entro pochi giorni" (nessun SLA, nessun advisory pubblicato: non verificato); superficie locale chiusa (D11, D12); il guardiano ora fallisce chiuso. Aperti: sezione 5 | decisione sulle voci di sezione 5; un advisory per D2 |
-| **Prodotto / UX** | giallo | `scan .` ora fa quello che dice; messaggi d'errore chiari; un nuovo utente **non e' stato provato**; nessuna misura di accessibilita' | prova con una persona vera; misura WCAG |
-| **QA** | verde con riserva | 901 test + 44 casi di processo, nessuno saltato (`skip`/`only`: 0); ogni legge nuova vista rossa; punteggio di mutazione 78-100% sul codice toccato. Riserva: `composer.ts` 49,5% e il resto dell'estensione non muta | mutation testing di `content.ts`, `ui.ts`, `options.ts` |
-| **Ops / SRE** | giallo | installazione pulita 19 s; 10 release installate e usate; nessuno stato lato server (niente backup da ripristinare); rollback = pubblicare una versione nuova (npm non permette di ritirarne una). Windows/macOS non provati | prova su Windows e macOS; un job notturno con `test:clean` e le release vecchie |
-| **Supporto / utenti** | giallo | di cosa si lamenteranno per primo: Block che rifiuta un corpo oltre 5 MB (immagini); l'hook che blocca quando non legge stdin; il CLI che ora esce 2 su un comando sbagliato | messaggi con la via d'uscita per il primo e il secondo |
-| **Sales / marketing** | giallo | il README dice "50+" (sono 83); promette Cursor e Windsurf (non provati); "nothing leaves your machine": coerente con i test. I numeri dell'oracolo sono su un corpus costruito da me | provare Cursor/Windsurf; un corpus esterno per il confronto |
-| **Legale / privacy** | verde | MIT; nessuna dipendenza runtime; `PRIVACY.md` coerente con i test di zero-rete e di log senza segreti; il proxy inoltra solo la richiesta dell'agente | nulla di misurato che manchi |
-| **Maintainer open source** | giallo | CHANGELOG e versioni chiari; 5 push con CI rossa non notati, release compresa; dependabot attivo; bus factor 1 | notifica sulla CI rossa; una persona in piu' |
-| **Nuovo contributore** | verde | clone pulito -> `verify` verde in 19 s (prima falliva in 1 s); CONTRIBUTING corretto; Playwright serve solo per `test:dom` | nulla di misurato che manchi |
-| **Chi lo usa come dipendenza** | giallo | API del motore invariata (stessi export); da 2.0.3 importabile. Cambiano comportamenti: exit 2 su comando sconosciuto, anteprime piu' corte, il proxy blocca di piu', alcuni span dei rilevatori | numero di versione che lo dica (consiglio minore, 2.1.0); nota nel CHANGELOG |
+| **CEO / owner** | giallo | la 2.1.0 e' pubblicata su GitHub e dice cosa e' stato corretto; il proxy non perde piu' il segreto in nessuna delle 13 forme misurate. Ma il tag `v2.1.0` punta a un commit in cui ogni `package.json` dice ancora 2.0.4, e su npm c'e' la 2.0.3 | decidere il numero del prossimo rilascio e pubblicare npm, Chrome Web Store e AMO; non pubblicare i numeri sul sito prima |
+| **CTO / architetto** | giallo | zero dipendenze a runtime; 1 solo autore; `proxy.ts` e' il punto singolo di guasto per chi lo usa; `--reversible` trattiene la risposta fino alla fine; il mutation testing ora gira ogni settimana in una copia con TypeScript 5 (`scripts/mutation.mjs`); vitest 5 chiude l'audit ma chiede Node >= 22.12, mentre il prodotto dichiara Node >= 20 | scegliere se alzare il minimo a Node 22 (Node 20 e' fuori supporto da aprile 2026): sblocca vitest 5 e la PR dependabot; un secondo manutentore |
+| **CISO / sicurezza** | giallo | superficie locale chiusa (D11, D12); guardiano che fallisce chiuso e consegna il blocco anche su pipe asincrona (D8, D23); il proxy legge ogni stringa, le chiavi, e rifiuta una chiave doppia in Block (D2, D18); tetti di memoria (D19). Aperti: sezione 5 (blocchi `thinking` non letti, 2,1 s con 100.000 stringhe piccole, match oltre 250.000 caratteri). SECURITY.md ha un canale privato; nessun advisory pubblicato per D2 (non verificato) | decisione sulle voci di sezione 5; un advisory per D2 |
+| **Prodotto / UX** | giallo | accessibilita' misurata con axe e tastiera (19 controlli), 18 schermate in stati diversi, e viste in un Firefox vero, dove sono emersi due difetti visivi che Chromium non mostrava (D28). **Non provato**: una persona vera al primo uso, i siti veri con il loro CSS | prova con una persona; l'indicatore sopra le pagine vere |
+| **QA** | verde con riserva | 3.981 test + 119 casi di processo, nessuno saltato; ogni legge nuova vista rossa (anche i controlli di Firefox, sabotando il codice); browser: Chromium 141, Chrome for Testing 154 e Firefox 157 in locale, Chromium e Firefox del runner in CI; sistemi: Linux, Windows, macOS in CI; punteggio di mutazione: motore, proxy, core, lettore JSON ed estensione (vedi sezione 4). Riserva: `cli.ts`, `content.ts`, `ui.ts`, `options.ts`, `popup.ts` non muovono con Stryker | nulla di misurato che manchi, a parte la riserva |
+| **Ops / SRE** | giallo | installazione pulita 19 s; CI verde su Linux, Windows e macOS, Node 20 e 22; job settimanali (Platforms, Mutation); nessuno stato lato server; rollback = pubblicare una versione nuova. **Non provati**: SIGTERM e SIGINT su Windows, memoria su Windows | provare Ctrl+C reale su Windows |
+| **Supporto / utenti** | giallo | di cosa si lamenteranno per primo: l'hook che blocca quando non legge stdin; Block che rifiuta un corpo oltre 32 MB (prima 5 MB); `--reversible` che consegna la risposta tutta insieme; il CLI che esce 2 su un comando sbagliato | messaggi con la via d'uscita per i primi due |
+| **Sales / marketing** | giallo | il README ora dice solo cio' che e' stato misurato (83 rilevatori, agenti non eseguiti, streaming con server finto). I numeri dell'oracolo sono su un corpus costruito da me; il sito non e' stato toccato | provare Cursor e Windsurf; un corpus esterno; pubblicare solo prima/dopo che reggono |
+| **Legale / privacy** | verde | MIT; nessuna dipendenza runtime; `PRIVACY.md` coerente con i test di zero-rete e di log senza segreti; il test su Firefox forza connessioni dirette e mappa `claude.ai` su un server locale, nessun sito vero e' stato contattato | nulla di misurato che manchi |
+| **Maintainer open source** | giallo | CI verde sui tre sistemi; CHANGELOG diviso in "v2.1.0" e "Unreleased"; la PR dependabot su vitest 5 resta rossa per il vincolo di Node; bus factor 1; il rilascio e' manuale (il tag e' stato creato senza aumentare le versioni) | un controllo che confronti tag e `package.json`; una persona in piu' |
+| **Nuovo contributore** | verde | clone pulito -> `verify` verde in 19 s; i controlli di browser chiedono Playwright (dom, a11y, schermate), Firefox e openssl (Firefox), `npm ci` (mutation); `test:firefox` dice "NON PROVATO" invece di fallire se manca Firefox | nulla di misurato che manchi |
+| **Chi lo usa come dipendenza** | giallo | API del motore invariata; cambiano comportamenti: exit 2 su comando sbagliato, anteprime piu' corte, il proxy blocca di piu' e inoltra fino a 32 MB, `env_secret` trova piu' casi, pannello dell'estensione da 320 px | un numero di versione che lo dica; la nota "Behaviour that changes" nel CHANGELOG (scritta) |
 
 ## Dove le figure si contraddicono
 
-- **CEO e marketing contro CISO.** Il CEO vuole rilasciare subito e pubblicare i dati
-  ("incredibili"). Il CISO dice che il rilascio deve precedere ogni pubblicazione: i
-  numeri "prima" sono una mappa dei punti deboli di chi non ha aggiornato. Ho dato
-  ragione al CISO sull'ordine.
-- **CISO contro Supporto e Ops.** Il guardiano che fallisce chiuso (hook senza motore
-  o senza stdin) e' giusto per la sicurezza e blocca tutti i prompt se il bundle e'
-  rotto. Ho scelto fail-closed, coerente con quello che il codice gia' faceva per i
-  prompt troppo lunghi. Resta una scelta tua.
-- **CISO contro Prodotto.** Block rifiuta un corpo oltre 5 MB: sicuro, ma rifiuta
-  un'immagine legittima. Non risolto.
-- **Marketing contro QA.** Marketing vuole "570 su 570"; QA dice che il corpus l'ha
-  scritto la stessa persona che ha corretto il rilevatore. Non va citato senza il
-  limite scritto sopra.
+- **CEO e marketing contro CISO.** Il CEO vuole pubblicare i dati ("incredibili"). Il CISO dice
+  che il rilascio deve precedere ogni pubblicazione: i numeri "prima" sono una mappa dei punti
+  deboli di chi non ha aggiornato. Il rilascio 2.1.0 e' uscito; ho lasciato il sito com'e'.
+- **CISO contro Supporto e Ops.** Il guardiano che fallisce chiuso e' giusto per la sicurezza e
+  blocca tutti i prompt se il bundle e' rotto. Ho scelto fail-closed, coerente con i prompt troppo
+  lunghi. Resta una scelta tua.
+- **CISO contro Prodotto.** Il tetto di scansione passa da 5 a 32 MB: un'immagine legittima non e'
+  piu' rifiutata in Block, ma un corpo piu' grande tiene il proxy occupato piu' a lungo. Scelto 32 MB.
+- **CTO contro Maintainer e Ops (nuova).** vitest 5 chiude l'audit di sviluppo ma chiede Node
+  >= 22.12; il prodotto dichiara Node >= 20. Ho tenuto vitest 4 e il minimo a 20: non cambio cio'
+  che dichiariamo ai clienti per una vulnerabilita' solo di sviluppo (il grafo di produzione ha 0).
+- **Marketing contro QA.** Marketing vuole "570 su 570"; QA dice che il corpus l'ha scritto la
+  stessa persona che ha corretto il rilevatore. Non va citato senza il limite scritto sopra.
 - **CTO contro Ops.** Le finestre raddoppiano il costo sui file grandi; Ops preferisce
   completezza a velocita'. Ho scelto completezza.
-- **Maintainer contro trasparenza.** Per togliere ogni riferimento a strumenti dai
-  commit ho riscritto la cronologia del mio branch (prima di ogni PR). Cosa persa: nulla,
-  il contenuto e' identico; il vecchio hash non esiste piu'.
+- **Release contro codice (nuova).** Il tag `v2.1.0` e le note sono pubblicati, ma il codice
+  sotto il tag si presenta come 2.0.4. Non ho cambiato i numeri: e' una tua decisione.
 
 ## Raccomandazione
 
 Ordine:
 
-1. **Ripristinare l'accesso GitHub della sessione** (il push e' bloccato dalla sessione
-   con 403) e aprire la PR.
-2. **Rileggere la PR** (la parte a rischio: `proxy.ts`, `cli.ts`/`core.ts`, `guard.mjs`,
-   `content.ts`, i quattro rilevatori).
-3. **Rilasciare 2.1.0** (non 2.0.5: ci sono cambiamenti di comportamento) con
-   CHANGELOG; aggiornare insieme plugin, npm, estensione (la Chrome Web Store serve la
-   2.0.1, secondo il messaggio della release).
-4. **Solo dopo**, pubblicare sul sito la pagina con prima/dopo, usando
-   `scripts/benchmarks.mjs` (riproducibile) e `scripts/oracle.mjs` con le sue
-   riserve scritte.
+1. **Rileggere questa PR** nelle parti a rischio: `proxy.ts` (`restoreStream`, `readBody`),
+   `json.ts`, `env-secret.ts`, `content.ts`/`composer.ts`/`ui.ts`. Un revisore indipendente in
+   sola lettura le ha gia' guardate (esito nella descrizione della PR).
+2. **Fondere** quando la CI e' verde, **poi scegliere il numero** (consiglio 2.1.1 se resta
+   tutto un seguito della 2.1.0, 2.2.0 se conta il cambio di tetto e di `env_secret`) e
+   aggiornare insieme le sei posizioni: i tre `package.json`, `plugin.json`, `marketplace.json`,
+   e `package-lock.json`.
+3. **Pubblicare** npm, Chrome Web Store (serve ancora la 2.0.1 secondo il messaggio della release
+   2.0.4) e AMO insieme: l'estensione ha correzioni che chi la usa vede (accessibilita', secondo
+   editor, stato d'errore).
+4. **Solo dopo**, il sito: prima/dopo con `scripts/benchmarks.mjs` e `scripts/oracle.mjs`, con
+   le loro riserve scritte.
 
-Cosa mi farebbe cambiare idea: una prova con un modello vero in streaming che mostri
-il token reversibile spezzato (priorita' sul punto 3); un fallimento su Windows del
-hook o del proxy; il revisore che trova una seconda regressione nelle correzioni.
+Cosa mi farebbe cambiare idea: una prova con un agente vero e un modello vero in streaming che
+mostri un difetto in `--reversible` o nel proxy (priorita' sul punto 3); un fallimento su
+Windows di `contextia run` con Ctrl+C; il revisore che trova una regressione (priorita' sul punto 2).
 
 ## Cosa serve a te (separato da cio' che faccio io)
 
-- Riconnettere GitHub: https://claude.ai/connect-github (e la GitHub App sul repo).
-- Decidere: numero di versione (2.1.0?), hook fail-closed o no, se e quando pubblicare.
-- Macchine e account: **Windows** e **macOS** (CLI, proxy, `run`, Ctrl+C, hook);
-  **Firefox, Edge, Safari**; account veri su **ChatGPT, Claude, Gemini** per provare
-  l'estensione sul DOM vero; un'installazione di **Claude Code**, **Cursor** e
-  **Windsurf** per provare il proxy con un agente vero (e un modello in streaming per
-  il token reversibile); i permessi di pubblicazione su **npm**, **Chrome Web Store**
-  e **AMO**; un secondo manutentore.
+- **Decisioni**: il numero di versione; se alzare il minimo a Node 22; se 32 MB di tetto di
+  scansione va bene; se tenere l'hook fail-closed; se e quando pubblicare sul sito.
+- **Macchine e account**: una macchina **Windows** e una **macOS** reali (Ctrl+C in `run`,
+  SIGTERM, memoria); **Edge e Safari**; account veri su **ChatGPT, Claude, Gemini** per vedere
+  l'indicatore sul DOM e sul CSS veri; un'installazione di **Claude Code**, **Cursor**,
+  **Windsurf** e **aider** con una chiave API per provare il proxy con un agente vero e un
+  modello in streaming; i permessi di pubblicazione su **npm**, **Chrome Web Store** e **AMO**;
+  un secondo manutentore.
