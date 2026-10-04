@@ -14,7 +14,7 @@
 // rest is prose and still needs a human to try it.
 
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -125,6 +125,82 @@ try {
   check('an invalid --mode is refused with exit 2', () => {
     const r = run(['proxy', '--mode', 'nonsense'])
     assert(r.code === 2, `expected exit 2, got ${r.code}`)
+  })
+
+  // `contextia scan .` is the documented pre-commit and CI use. It used to skip
+  // every dotfile but `.env`, so `.env.production`, `.env.local` and
+  // `.aws/credentials`, where secrets actually live, were never read, and
+  // symlinked files were dropped without a word. Each of these held a planted
+  // secret that scanning the file by name did find.
+  check('scan of a directory reads dotfiles, dot-directories and symlinked files', () => {
+    const tree = mkdtempSync(join(tmpdir(), 'contextia-dots-'))
+    try {
+      mkdirSync(join(tree, '.aws'))
+      mkdirSync(join(tree, 'config'))
+      // built at run time: a literal key of this shape trips push protection
+      const stripe = ['sk', 'live', 'a1B2c3D4a1B2c3D4a1B2c3D4'].join('_')
+      writeFileSync(join(tree, '.env.production'), `STRIPE_SECRET_KEY=${stripe}\n`)
+      writeFileSync(join(tree, '.env.local'), 'DB_PASSWORD=Sup3rS3cretPass\n')
+      writeFileSync(join(tree, '.aws/credentials'), '[default]\naws_access_key_id = AKIAIOSFODNN7EXAMPLE\n')
+      writeFileSync(join(tree, 'config/real.txt'), 'AKIAIOSFODNN7EXAMPLE\n')
+      symlinkSync(join(tree, 'config/real.txt'), join(tree, 'link.txt'))
+      const out = run(['scan', '.', '--json'], { cwd: tree }).stdout
+      const files = new Set(JSON.parse(out).map((r) => r.file.replace(/^\.\//, '')))
+      for (const f of ['.env.production', '.env.local', '.aws/credentials', 'config/real.txt', 'link.txt']) {
+        assert(files.has(f), `scan . did not read ${f} (read: ${[...files].join(', ')})`)
+      }
+    } finally {
+      rmSync(tree, { recursive: true, force: true })
+    }
+  })
+
+  check('scan of a directory still skips .git and node_modules', () => {
+    const tree = mkdtempSync(join(tmpdir(), 'contextia-skip-'))
+    try {
+      for (const d of ['.git', 'node_modules']) {
+        mkdirSync(join(tree, d))
+        writeFileSync(join(tree, d, 'x.txt'), 'AKIAIOSFODNN7EXAMPLE\n')
+      }
+      assert(run(['scan', '.'], { cwd: tree }).code === 0, 'descended into a dependency or VCS tree')
+    } finally {
+      rmSync(tree, { recursive: true, force: true })
+    }
+  })
+
+  // A secret past the engine's 1,000,000 character cap used to give
+  // "0 secrets found", exit 0, and a redact that printed it in clear.
+  check('scan and redact reach a secret in the tail of a file over the engine cap', () => {
+    const tree = mkdtempSync(join(tmpdir(), 'contextia-big-'))
+    try {
+      const f = join(tree, 'big.log')
+      writeFileSync(f, 'x'.repeat(1_100_000) + '\nAKIAIOSFODNN7EXAMPLE\n')
+      const s = run(['scan', f])
+      assert(s.code === 1, `scan exited ${s.code} on a file with a secret in its tail`)
+      const r = run(['redact', f])
+      assert(!r.stdout.includes('AKIAIOSFODNN7EXAMPLE'), 'redact printed the tail secret in clear')
+    } finally {
+      rmSync(tree, { recursive: true, force: true })
+    }
+  })
+
+  // `contextia scna .` printed the help and exited 0. In a pre-commit hook a
+  // typo then reads as "nothing found".
+  check('an unknown command exits 2, and help still exits 0', () => {
+    const typo = run(['scna', '.'])
+    assert(typo.code === 2, `a typo exited ${typo.code}`)
+    assert(/unknown command/i.test(typo.stderr ?? ''), 'no message about the unknown command')
+    for (const args of [[], ['help'], ['--help'], ['-h']]) {
+      const h = run(args)
+      assert(h.code === 0 && /Usage:/.test(h.stdout), `help via [${args.join(' ')}] exited ${h.code}`)
+    }
+  })
+
+  check('a bad --port exits 2 with a message, not a stack trace', () => {
+    for (const port of ['abc', '99999', '-1', '80.5', '']) {
+      const r = run(['proxy', '--port', port])
+      assert(r.code === 2, `--port '${port}' exited ${r.code}`)
+      assert(!/node:net|at Object|RangeError/.test(r.stderr ?? ''), `--port '${port}' crashed with a stack trace`)
+    }
   })
 } finally {
   rmSync(box, { recursive: true, force: true })

@@ -16,10 +16,12 @@ const isWord = (c: string | undefined): boolean => c !== undefined && WORD.test(
 
 function scanConnectionStrings(text: string): RawMatch[] {
   const out: RawMatch[] = []
-  let from = 0 // the old regex resumed after each match, so a start may not precede the last end
+  let from = 0 // where to look for the next "://"
   for (let at = text.indexOf('://', from); at !== -1; at = text.indexOf('://', from)) {
+    // The previous match ends at a '/' or whitespace, which the scheme class excludes, so
+    // this walk can never reach back into it.
     let run = at
-    while (run > from && SCHEME.test(text[run - 1]!)) run--
+    while (run > 0 && SCHEME.test(text[run - 1]!)) run--
     // the earliest start the regex would have taken: a letter on a word boundary
     let start = run
     while (start < at && !(LETTER.test(text[start]!) && isWord(text[start - 1]) === false)) start++
