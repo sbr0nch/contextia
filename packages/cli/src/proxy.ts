@@ -120,38 +120,74 @@ function isLoopbackAddr(addr: string | undefined): boolean {
 interface TextNode {
   get(): string
   set(value: string): void
+  /** Conversational text (system prompt, message text). Only this carries the signature note. */
+  prose: boolean
 }
 
-// The user-authored text in an Anthropic or OpenAI request: system prompt and
-// each message's content (string or an array of text blocks). We scan/redact
-// exactly these and leave the rest of the payload untouched.
+type Slot = { container: Record<string, unknown> | unknown[]; key: string | number }
+
+const slotGet = (s: Slot): unknown => (s.container as Record<string | number, unknown>)[s.key]
+const slotSet = (s: Slot, v: string): void => {
+  ;(s.container as Record<string | number, unknown>)[s.key] = v
+}
+
+// Strings that are not text and must come back byte for byte. A thinking block
+// is signed: rewriting it makes the API reject the whole request. Base64 media
+// is not prose: rewriting it corrupts the image.
+const BASE64_URL = /^data:[^,]{0,100};base64,/i
+function isOpaque(container: unknown, key: string | number, value: string): boolean {
+  if (BASE64_URL.test(value)) return true
+  if (!container || typeof container !== 'object' || Array.isArray(container)) return false
+  const o = container as Record<string, unknown>
+  if (o['type'] === 'thinking' || o['type'] === 'redacted_thinking') return true
+  return key === 'data' && typeof o['media_type'] === 'string'
+}
+
+// Where conversational text lives. Read first and in this order, so the
+// signature note lands in prose whatever order the client wrote its keys in.
+const LEAD_KEYS = ['system', 'instructions', 'messages', 'input', 'prompt']
+
+/**
+ * Every string a request can carry to the model.
+ *
+ * This used to read only `system` and `messages[].content` text, so anything
+ * else an agent sent (a tool_result holding the .env it just read, a tool call's
+ * arguments, the whole OpenAI Responses and Gemini shapes) went upstream
+ * unscanned and unreported. A request has no fixed shape we can enumerate, so
+ * the walk is generic and the exceptions are the strings that are not text.
+ *
+ * Iterative on purpose: the body is client-controlled and a deeply nested one
+ * must not be able to overflow the stack.
+ */
 export function* textNodes(body: unknown): Generator<TextNode> {
   if (!body || typeof body !== 'object') return
-  const b = body as Record<string, unknown>
+  const root = body as Record<string, unknown>
+  const lead = new Set(LEAD_KEYS)
+  const order: Array<string | number> = Array.isArray(body)
+    ? body.map((_, i) => i)
+    : [...LEAD_KEYS.filter((k) => k in root), ...Object.keys(root).filter((k) => !lead.has(k))]
 
-  if (typeof b['system'] === 'string') {
-    yield { get: () => b['system'] as string, set: (v) => (b['system'] = v) }
-  } else if (Array.isArray(b['system'])) {
-    for (const block of b['system']) yield* blockText(block)
-  }
+  const stack: Array<{ container: Record<string, unknown> | unknown[]; key: string | number; prose: boolean }> = []
+  for (const k of [...order].reverse()) stack.push({ container: root, key: k, prose: k === 'system' || k === 'messages' })
 
-  if (Array.isArray(b['messages'])) {
-    for (const m of b['messages']) {
-      if (!m || typeof m !== 'object') continue
-      const msg = m as Record<string, unknown>
-      if (typeof msg['content'] === 'string') {
-        yield { get: () => msg['content'] as string, set: (v) => (msg['content'] = v) }
-      } else if (Array.isArray(msg['content'])) {
-        for (const block of msg['content']) yield* blockText(block)
+  while (stack.length) {
+    const { container, key, prose } = stack.pop()!
+    const value = (container as Record<string | number, unknown>)[key]
+    if (typeof value === 'string') {
+      if (isOpaque(container, key, value)) continue
+      const slot: Slot = { container, key }
+      yield { get: () => slotGet(slot) as string, set: (v) => slotSet(slot, v), prose }
+    } else if (value && typeof value === 'object') {
+      // Prose stays prose only along the path system/messages -> content -> text.
+      // A tool call's input or a tool result's content is data, not conversation.
+      const o = value as Record<string, unknown>
+      const dataBlock = !Array.isArray(value) && (o['type'] === 'tool_use' || o['type'] === 'tool_result' || o['type'] === 'tool_call' || o['role'] === 'tool')
+      const keys = Array.isArray(value) ? value.map((_, i) => i) : Object.keys(o)
+      for (const k of [...keys].reverse()) {
+        const childProse = prose && !dataBlock && (Array.isArray(value) || k === 'content' || k === 'text' || k === 'system')
+        stack.push({ container: value as Record<string, unknown>, key: k, prose: childProse })
       }
     }
-  }
-}
-
-function* blockText(block: unknown): Generator<TextNode> {
-  if (block && typeof block === 'object' && typeof (block as Record<string, unknown>)['text'] === 'string') {
-    const b = block as Record<string, unknown>
-    yield { get: () => b['text'] as string, set: (v) => (b['text'] = v) }
   }
 }
 
@@ -193,7 +229,7 @@ export function processPayload(
               },
             })
           : redact(text, found)
-        if (signature && !noted) {
+        if (signature && node.prose && !noted) {
           out = SIGNATURE + out
           noted = true
         }

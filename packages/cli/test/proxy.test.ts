@@ -60,9 +60,12 @@ describe('textNodes / processPayload', () => {
     expect(body.messages[0]!.content).toBe('AKIAIOSFODNN7EXAMPLE')
   })
 
-  it('yields nothing for unrelated payloads', () => {
-    expect([...textNodes({ foo: 'bar' })]).toHaveLength(0)
+  it('finds nothing in unrelated payloads, and yields nothing for non-objects', () => {
+    // Every string is a candidate now, so {foo: 'bar'} yields a node; it just has no secret in it.
+    expect(processPayload({ foo: 'bar' }, 'redact', configFor())).toHaveLength(0)
     expect([...textNodes(null)]).toHaveLength(0)
+    expect([...textNodes(['AKIAIOSFODNN7EXAMPLE'])]).toHaveLength(1) // a top-level array is scanned too
+    expect([...textNodes('AKIAIOSFODNN7EXAMPLE')]).toHaveLength(0)
   })
 
   it('also redacts custom values and patterns', () => {
