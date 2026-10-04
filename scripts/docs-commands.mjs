@@ -14,7 +14,7 @@
 // rest is prose and still needs a human to try it.
 
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -112,6 +112,49 @@ try {
     assert(r.stdout.includes('const key'), 'the surrounding text was lost')
   })
 
+  // --json is what a CI step parses. It must stay valid for a clean tree, and for
+  // file names a shell happily creates.
+  check('scan --json stays valid JSON: empty on a clean tree, and with hostile file names', () => {
+    const clean = run(['scan', '--json', 'src/clean.ts'], { cwd: box })
+    assert(clean.code === 0 && JSON.parse(clean.stdout).length === 0, 'a clean scan did not print []')
+    const odd = mkdtempSync(join(tmpdir(), 'contextia-odd-'))
+    try {
+      const names = ['a "quoted" name.txt', 'new\nline.txt', 'tab\there.txt', 'caf\u00e9 \ud83d\ude00.txt', 'back\\slash.txt']
+      for (const n of names) writeFileSync(join(odd, n), 'k = "AKIAIOSFODNN7EXAMPLE"\n')
+      const r = run(['scan', '--json', '.'], { cwd: odd })
+      const rows = JSON.parse(r.stdout)
+      assert(r.code === 1 && rows.length === names.length, `expected ${names.length} rows, got ${rows.length}`)
+      for (const n of names) assert(rows.some((x) => x.file === './' + n || x.file === n), `file name lost: ${JSON.stringify(n)}`)
+      assert(rows.every((x) => x.preview && !x.preview.includes('AKIAIOSFODNN7EXAMPLE')), 'a preview carries the whole key')
+    } finally {
+      rmSync(odd, { recursive: true, force: true })
+    }
+  })
+
+  // `contextia scan . --json | jq` is the pipe a CI step uses. The scan exited with
+  // process.exit() straight after writing, and a pipe is written asynchronously, so
+  // the output stopped at the first 65,536 bytes: measured 65,536 of 807,789, and
+  // the JSON did not parse. The same run into a file was whole, which is why
+  // nothing noticed.
+  check('scan --json through a pipe is complete when the output is large', () => {
+    const many = mkdtempSync(join(tmpdir(), 'contextia-many-'))
+    try {
+      const FILES = 1500
+      for (let i = 0; i < FILES; i++) writeFileSync(join(many, `f${i}.env`), `k = "AKIAIOSFODNN7EXAMPLE"\nPASSWORD=Sup3rS3cretPass${i}\n`)
+      const r = run(['scan', '--json', '.'], { cwd: many }) // run() reads through a pipe
+      let rows
+      try {
+        rows = JSON.parse(r.stdout)
+      } catch (e) {
+        throw new Error(`the JSON stopped at ${r.stdout.length} bytes and does not parse`)
+      }
+      assert(rows.length === FILES * 2, `expected ${FILES * 2} rows, got ${rows.length}`)
+      assert(r.code === 1, `exit ${r.code}`)
+    } finally {
+      rmSync(many, { recursive: true, force: true })
+    }
+  })
+
   check('list names the detectors', () => {
     const r = run(['list'])
     assert(r.code === 0 && /aws_access_key_id/.test(r.stdout), 'roster missing')
@@ -125,6 +168,103 @@ try {
   check('an invalid --mode is refused with exit 2', () => {
     const r = run(['proxy', '--mode', 'nonsense'])
     assert(r.code === 2, `expected exit 2, got ${r.code}`)
+  })
+
+  // `contextia scan .` is the documented pre-commit and CI use. It used to skip
+  // every dotfile but `.env`, so `.env.production`, `.env.local` and
+  // `.aws/credentials`, where secrets actually live, were never read, and
+  // symlinked files were dropped without a word. Each of these held a planted
+  // secret that scanning the file by name did find.
+  check('scan of a directory reads dotfiles, dot-directories and symlinked files', () => {
+    const tree = mkdtempSync(join(tmpdir(), 'contextia-dots-'))
+    try {
+      mkdirSync(join(tree, '.aws'))
+      mkdirSync(join(tree, 'config'))
+      // built at run time: a literal key of this shape trips push protection
+      const stripe = ['sk', 'live', 'a1B2c3D4a1B2c3D4a1B2c3D4'].join('_')
+      writeFileSync(join(tree, '.env.production'), `STRIPE_SECRET_KEY=${stripe}\n`)
+      writeFileSync(join(tree, '.env.local'), 'DB_PASSWORD=Sup3rS3cretPass\n')
+      writeFileSync(join(tree, '.aws/credentials'), '[default]\naws_access_key_id = AKIAIOSFODNN7EXAMPLE\n')
+      writeFileSync(join(tree, 'config/real.txt'), 'AKIAIOSFODNN7EXAMPLE\n')
+      const outside = mkdtempSync(join(tmpdir(), 'contextia-outside-'))
+      writeFileSync(join(outside, 'target.txt'), 'AKIAIOSFODNN7EXAMPLE\n')
+      symlinkSync(join(outside, 'target.txt'), join(tree, 'link.txt')) // a link to a file elsewhere
+      const out = run(['scan', '.', '--json'], { cwd: tree }).stdout
+      rmSync(outside, { recursive: true, force: true })
+      const files = new Set(JSON.parse(out).map((r) => r.file.replace(/^\.\//, '')))
+      for (const f of ['.env.production', '.env.local', '.aws/credentials', 'config/real.txt', 'link.txt']) {
+        assert(files.has(f), `scan . did not read ${f} (read: ${[...files].join(', ')})`)
+      }
+    } finally {
+      rmSync(tree, { recursive: true, force: true })
+    }
+  })
+
+  // The same file under two names (a symlink inside the tree) used to be reported twice,
+  // so "2 secrets found" for one secret.
+  check('a file reachable under two names is scanned and reported once', () => {
+    const tree = mkdtempSync(join(tmpdir(), 'contextia-twice-'))
+    try {
+      mkdirSync(join(tree, '.aws'))
+      writeFileSync(join(tree, '.aws/credentials'), 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE\n')
+      symlinkSync(join(tree, '.aws/credentials'), join(tree, 'creds-link'))
+      symlinkSync(join(tree, '.aws'), join(tree, 'dir-link')) // a link to a directory is not followed
+      symlinkSync(tree, join(tree, 'loop')) // and a loop cannot trap the walk
+      const rows = JSON.parse(run(['scan', '.', '--json'], { cwd: tree }).stdout)
+      const files = new Set(rows.map((r) => r.file))
+      assert(files.size === 1, `one file was reported under ${files.size} names: ${[...files].join(', ')}`)
+    } finally {
+      rmSync(tree, { recursive: true, force: true })
+    }
+  })
+
+  check('scan of a directory still skips .git and node_modules', () => {
+    const tree = mkdtempSync(join(tmpdir(), 'contextia-skip-'))
+    try {
+      for (const d of ['.git', 'node_modules']) {
+        mkdirSync(join(tree, d))
+        writeFileSync(join(tree, d, 'x.txt'), 'AKIAIOSFODNN7EXAMPLE\n')
+      }
+      assert(run(['scan', '.'], { cwd: tree }).code === 0, 'descended into a dependency or VCS tree')
+    } finally {
+      rmSync(tree, { recursive: true, force: true })
+    }
+  })
+
+  // A secret past the engine's 1,000,000 character cap used to give
+  // "0 secrets found", exit 0, and a redact that printed it in clear.
+  check('scan and redact reach a secret in the tail of a file over the engine cap', () => {
+    const tree = mkdtempSync(join(tmpdir(), 'contextia-big-'))
+    try {
+      const f = join(tree, 'big.log')
+      writeFileSync(f, 'x'.repeat(1_100_000) + '\nAKIAIOSFODNN7EXAMPLE\n')
+      const s = run(['scan', f])
+      assert(s.code === 1, `scan exited ${s.code} on a file with a secret in its tail`)
+      const r = run(['redact', f])
+      assert(!r.stdout.includes('AKIAIOSFODNN7EXAMPLE'), 'redact printed the tail secret in clear')
+    } finally {
+      rmSync(tree, { recursive: true, force: true })
+    }
+  })
+
+  // `contextia scna .` printed the help and exited 0. In a pre-commit hook a
+  // typo then reads as "nothing found".
+  check('an unknown command exits 2, and help still exits 0', () => {
+    const typo = run(['scna', '.'])
+    assert(typo.code === 2, `a typo exited ${typo.code}`)
+    assert(/unknown command/i.test(typo.stderr ?? ''), 'no message about the unknown command')
+    for (const args of [[], ['help'], ['--help'], ['-h']]) {
+      const h = run(args)
+      assert(h.code === 0 && /Usage:/.test(h.stdout), `help via [${args.join(' ')}] exited ${h.code}`)
+    }
+  })
+
+  check('a bad --port exits 2 with a message, not a stack trace', () => {
+    for (const port of ['abc', '99999', '-1', '80.5', '']) {
+      const r = run(['proxy', '--port', port])
+      assert(r.code === 2, `--port '${port}' exited ${r.code}`)
+      assert(!/node:net|at Object|RangeError/.test(r.stderr ?? ''), `--port '${port}' crashed with a stack trace`)
+    }
   })
 } finally {
   rmSync(box, { recursive: true, force: true })

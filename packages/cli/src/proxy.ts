@@ -1,7 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http'
 import { gunzipSync, inflateSync, brotliDecompressSync } from 'node:zlib'
 import {
-  detectDetailed,
   redact,
   customFindings,
   detectors,
@@ -9,6 +8,7 @@ import {
   type Finding,
   type CustomRules,
 } from '@sbr0nch/contextia-engine'
+import { detectAll } from './core.js'
 
 export type ProxyMode = 'warn' | 'redact' | 'block'
 export type { CustomRules }
@@ -49,9 +49,8 @@ export interface ProxyStats {
 
 const UNSCANNABLE_DETAIL: Record<UnscannableReason, string> = {
   oversize: 'larger than the 5 MB scan cap',
-  encoding: 'unsupported content-encoding',
+  encoding: 'unsupported content-encoding, or larger than the 5 MB scan cap once decompressed',
   unparsable: 'not JSON we understand',
-  truncated: 'longer than the engine scan cap, so the tail was not read',
 }
 
 /** A secret-free browser catch, reported to the local dashboard. Counts only. */
@@ -113,6 +112,26 @@ export function foldEvents(stats: ProxyStats, events: BrowserEvent[]): void {
   }
 }
 
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
+const EXTENSION_ORIGIN = /^(chrome|moz|safari-web)-extension:\/\//
+
+/**
+ * Whether a request for the proxy's own pages may be answered. The pages sit on a
+ * loopback port that any web page the user has open can reach. A rebound domain
+ * arrives with its own name in Host, so Host must be loopback; a page's POST
+ * carries its site in Origin, so only the extension or a client with no Origin
+ * may post. An operator who bound another interface on purpose is not held to Host.
+ */
+function localRequestAllowed(req: IncomingMessage, opts: ProxyOptions, post: boolean): boolean {
+  const bound = opts.host ?? DEFAULT_HOST
+  if (LOOPBACK_HOSTS.has(bound) || bound === 'localhost') {
+    const host = (req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '')
+    if (!LOOPBACK_HOSTS.has(host)) return false
+  }
+  const origin = req.headers.origin
+  return !(post && origin !== undefined && !EXTENSION_ORIGIN.test(origin))
+}
+
 function isLoopbackAddr(addr: string | undefined): boolean {
   return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1'
 }
@@ -120,38 +139,86 @@ function isLoopbackAddr(addr: string | undefined): boolean {
 interface TextNode {
   get(): string
   set(value: string): void
+  /** Conversational text (system prompt, message text). Only this carries the signature note. */
+  prose: boolean
 }
 
-// The user-authored text in an Anthropic or OpenAI request: system prompt and
-// each message's content (string or an array of text blocks). We scan/redact
-// exactly these and leave the rest of the payload untouched.
+type Slot = { container: Record<string, unknown> | unknown[]; key: string | number }
+
+const slotGet = (s: Slot): unknown => (s.container as Record<string | number, unknown>)[s.key]
+const slotSet = (s: Slot, v: string): void => {
+  ;(s.container as Record<string | number, unknown>)[s.key] = v
+}
+
+// Strings that are not text and must come back byte for byte. The signed parts of a
+// thinking block: rewriting them makes the API reject the request. Base64 media:
+// rewriting it corrupts the image, and random base64 trips detectors now and then.
+//
+// Each rule is narrow on purpose. Whatever it exempts is never scanned, so a rule
+// that is too wide is a hole: a plain-text document puts its text in the same
+// `source.data` an image puts base64 in, and a `data:` prefix says nothing about
+// the rest of the string.
+// Real base64 has no spaces (only the line breaks of MIME wrapping) and media is long,
+// so a short string, or one with a space in it, is text and is read.
+const BASE64_BODY = /^[A-Za-z0-9+/_=\r\n-]{128,}$/
+const BASE64_URL = /^data:[^,]{0,100};base64,[A-Za-z0-9+/_=\r\n-]{128,}$/i
+const MEDIA_TYPE = /^(image|audio|video)\/|^application\/pdf$/i
+function isOpaque(container: unknown, key: string | number, value: string): boolean {
+  if (BASE64_URL.test(value)) return true
+  if (!container || typeof container !== 'object' || Array.isArray(container)) return false
+  const o = container as Record<string, unknown>
+  if (o['type'] === 'thinking') return key === 'thinking' || key === 'signature'
+  if (o['type'] === 'redacted_thinking') return key === 'data'
+  if (key !== 'data' || !BASE64_BODY.test(value)) return false
+  const mime = o['media_type'] ?? o['mime_type']
+  return o['type'] === 'base64' || (typeof mime === 'string' && MEDIA_TYPE.test(mime)) || typeof o['format'] === 'string'
+}
+
+// Where conversational text lives. Read first and in this order, so the
+// signature note lands in prose whatever order the client wrote its keys in.
+const LEAD_KEYS = ['system', 'instructions', 'messages', 'input', 'prompt']
+
+/**
+ * Every string a request can carry to the model.
+ *
+ * This used to read only `system` and `messages[].content` text, so anything
+ * else an agent sent (a tool_result holding the .env it just read, a tool call's
+ * arguments, the whole OpenAI Responses and Gemini shapes) went upstream
+ * unscanned and unreported. A request has no fixed shape we can enumerate, so
+ * the walk is generic and the exceptions are the strings that are not text.
+ *
+ * Iterative on purpose: the body is client-controlled and a deeply nested one
+ * must not be able to overflow the stack.
+ */
 export function* textNodes(body: unknown): Generator<TextNode> {
   if (!body || typeof body !== 'object') return
-  const b = body as Record<string, unknown>
+  const root = body as Record<string, unknown>
+  const lead = new Set(LEAD_KEYS)
+  const order: Array<string | number> = Array.isArray(body)
+    ? body.map((_, i) => i)
+    : [...LEAD_KEYS.filter((k) => k in root), ...Object.keys(root).filter((k) => !lead.has(k))]
 
-  if (typeof b['system'] === 'string') {
-    yield { get: () => b['system'] as string, set: (v) => (b['system'] = v) }
-  } else if (Array.isArray(b['system'])) {
-    for (const block of b['system']) yield* blockText(block)
-  }
+  const stack: Array<{ container: Record<string, unknown> | unknown[]; key: string | number; prose: boolean }> = []
+  for (const k of [...order].reverse()) stack.push({ container: root, key: k, prose: k === 'system' || k === 'messages' })
 
-  if (Array.isArray(b['messages'])) {
-    for (const m of b['messages']) {
-      if (!m || typeof m !== 'object') continue
-      const msg = m as Record<string, unknown>
-      if (typeof msg['content'] === 'string') {
-        yield { get: () => msg['content'] as string, set: (v) => (msg['content'] = v) }
-      } else if (Array.isArray(msg['content'])) {
-        for (const block of msg['content']) yield* blockText(block)
+  while (stack.length) {
+    const { container, key, prose } = stack.pop()!
+    const value = (container as Record<string | number, unknown>)[key]
+    if (typeof value === 'string') {
+      if (isOpaque(container, key, value)) continue
+      const slot: Slot = { container, key }
+      yield { get: () => slotGet(slot) as string, set: (v) => slotSet(slot, v), prose }
+    } else if (value && typeof value === 'object') {
+      // Prose stays prose only along the path system/messages -> content -> text.
+      // A tool call's input or a tool result's content is data, not conversation.
+      const o = value as Record<string, unknown>
+      const dataBlock = !Array.isArray(value) && (o['type'] === 'tool_use' || o['type'] === 'tool_result' || o['type'] === 'tool_call' || o['role'] === 'tool')
+      const keys = Array.isArray(value) ? value.map((_, i) => i) : Object.keys(o)
+      for (const k of [...keys].reverse()) {
+        const childProse = prose && !dataBlock && (Array.isArray(value) || k === 'content' || k === 'text' || k === 'system')
+        stack.push({ container: value as Record<string, unknown>, key: k, prose: childProse })
       }
     }
-  }
-}
-
-function* blockText(block: unknown): Generator<TextNode> {
-  if (block && typeof block === 'object' && typeof (block as Record<string, unknown>)['text'] === 'string') {
-    const b = block as Record<string, unknown>
-    yield { get: () => b['text'] as string, set: (v) => (b['text'] = v) }
   }
 }
 
@@ -171,16 +238,13 @@ export function processPayload(
   custom?: CustomRules,
   vault?: Map<string, string>,
   signature?: boolean,
-  /** Set to true when any node exceeded the engine scan cap, so part went unread. */
-  meta?: { truncated: boolean },
 ): Finding[] {
   const findings: Finding[] = []
   let noted = false
   for (const node of textNodes(body)) {
     const text = node.get()
-    const scan = detectDetailed(text, config)
-    if (scan.truncated && meta) meta.truncated = true
-    const found = [...scan.findings, ...(custom ? customFindings(text, custom) : [])]
+    // Windowed, so one long text (a file an agent read) is scanned to the end
+    const found = [...detectAll(text, config), ...(custom ? customFindings(text, custom) : [])]
     if (found.length) {
       findings.push(...found)
       if (mode === 'redact') {
@@ -193,7 +257,7 @@ export function processPayload(
               },
             })
           : redact(text, found)
-        if (signature && !noted) {
+        if (signature && node.prose && !noted) {
           out = SIGNATURE + out
           noted = true
         }
@@ -204,10 +268,19 @@ export function processPayload(
   return findings
 }
 
-/** Restore original values in the LLM's response (reversible mode). */
-export function detokenize(text: string, vault: Map<string, string>): string {
+/**
+ * Restore original values in the LLM's response (reversible mode).
+ *
+ * `jsonEscaped` is for a reply that is JSON, or SSE lines of JSON: the token sits
+ * inside a JSON string, so a value with a newline, a quote or a backslash has to
+ * go back escaped or the reply stops parsing.
+ */
+export function detokenize(text: string, vault: Map<string, string>, jsonEscaped = false): string {
   let out = text
-  for (const [token, original] of vault) out = out.split(token).join(original)
+  for (const [token, original] of vault) {
+    const value = jsonEscaped ? JSON.stringify(original).slice(1, -1) : original
+    out = out.split(token).join(value)
+  }
   return out
 }
 
@@ -236,7 +309,7 @@ const SKIP_REQUEST_HEADERS = new Set([
 const MAX_SCAN_BODY = 5 * 1024 * 1024 // larger bodies cannot be scanned in one pass
 
 /** Why a body could not be inspected. Null means it was scanned normally. */
-export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable' | 'truncated'
+export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable'
 
 /**
  * Decode a request body for scanning. Returns null when the encoding is one we
@@ -246,9 +319,11 @@ export function decodeBody(body: Buffer, encoding?: string): Buffer | null {
   const enc = (encoding ?? '').trim().toLowerCase()
   try {
     if (enc === '' || enc === 'identity') return body
-    if (enc === 'gzip' || enc === 'x-gzip') return gunzipSync(body)
-    if (enc === 'deflate') return inflateSync(body)
-    if (enc === 'br') return brotliDecompressSync(body)
+    // Capped: a 400 KB gzip expands to 400 MB, and the proxy used to allocate all of it.
+    const cap = { maxOutputLength: MAX_SCAN_BODY }
+    if (enc === 'gzip' || enc === 'x-gzip') return gunzipSync(body, cap)
+    if (enc === 'deflate') return inflateSync(body, cap)
+    if (enc === 'br') return brotliDecompressSync(body, cap)
   } catch {
     return null
   }
@@ -302,6 +377,12 @@ async function handle(
 ): Promise<void> {
   const path = req.url ?? '/'
 
+  if (path.startsWith('/__contextia') && !localRequestAllowed(req, opts, req.method === 'POST')) {
+    res.writeHead(403, { 'content-type': 'application/json' })
+    res.end('{"error":"not for this origin or host"}')
+    return
+  }
+
   // The proxy's own local dashboard / stats, never forwarded upstream.
   if (path === '/__contextia/stats') {
     res.writeHead(200, { 'content-type': 'application/json' })
@@ -351,7 +432,9 @@ async function handle(
   let dropContentEncoding = false
   let unscannable: UnscannableReason | null = null
 
-  if ((req.method === 'POST' || req.method === 'PUT') && body.length > 0) {
+  // Any method that carries a body. This was POST and PUT only: a PATCH or DELETE with
+  // a prompt in it went upstream unscanned and unreported.
+  if (req.method !== 'GET' && req.method !== 'HEAD' && body.length > 0) {
     if (body.length > MAX_SCAN_BODY) {
       unscannable = 'oversize'
     } else {
@@ -366,9 +449,7 @@ async function handle(
           unscannable = 'unparsable'
         }
         if (!unscannable) {
-          const meta = { truncated: false }
-          const findings = processPayload(json, opts.mode, config, opts.custom, vault, opts.signature, meta)
-          if (meta.truncated) unscannable = 'truncated'
+          const findings = processPayload(json, opts.mode, config, opts.custom, vault, opts.signature)
           if (findings.length > 0) {
             stats.withFindings++
             for (const f of findings) bump(stats.byType, f.type, 1)
@@ -455,7 +536,8 @@ async function handle(
   // Reversible mode: buffer the response and restore the originals so the LLM's
   // answer is usable. (Trades streaming for round-trip restoration.)
   if (vault && vault.size > 0) {
-    const restored = detokenize(await upstreamRes.text(), vault)
+    const jsonish = /json|event-stream/i.test(upstreamRes.headers.get('content-type') ?? '')
+    const restored = detokenize(await upstreamRes.text(), vault, jsonish)
     res.writeHead(upstreamRes.status, outHeaders)
     res.end(restored)
     return

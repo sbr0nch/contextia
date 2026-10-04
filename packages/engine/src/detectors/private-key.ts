@@ -1,10 +1,14 @@
 import type { Detector, RawMatch } from '../types.js'
 
 // PEM private-key blocks: an optional algorithm word (RSA, EC, DSA, OPENSSH,
-// ENCRYPTED, ...) then BEGIN/END PRIVATE KEY armor. The body is bounded by the
-// END marker, so the lazy match cannot backtrack catastrophically.
-const BLOCK =
-  /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----/g
+// ENCRYPTED, ...) then BEGIN/END PRIVATE KEY armor.
+//
+// BEGIN and END are found separately. A single lazy `BEGIN[\s\S]*?END` is
+// quadratic on a text with many BEGINs and no END: each one scans to the end of
+// the input (11.8 s on 1 MB). Once one BEGIN finds no END after it, no later
+// BEGIN can either, so the scan stops there.
+const BEGIN = /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----/g
+const END = /-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----/g
 
 export const privateKey: Detector = {
   id: 'private_key',
@@ -14,9 +18,14 @@ export const privateKey: Detector = {
   rationale: 'A PEM private key authenticates as you; anyone who reads it can impersonate the key holder.',
   scan(text: string): RawMatch[] {
     const out: RawMatch[] = []
-    for (const m of text.matchAll(BLOCK)) {
-      const start = m.index!
-      out.push({ start, end: start + m[0].length, match: m[0] })
+    BEGIN.lastIndex = 0
+    for (let b = BEGIN.exec(text); b !== null; b = BEGIN.exec(text)) {
+      END.lastIndex = b.index + b[0].length
+      const e = END.exec(text)
+      if (e === null) break
+      const end = e.index + e[0].length
+      out.push({ start: b.index, end, match: text.slice(b.index, end) })
+      BEGIN.lastIndex = end
     }
     return out
   },

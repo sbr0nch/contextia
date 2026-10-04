@@ -176,7 +176,7 @@ var anthropicKey = {
 };
 
 // packages/engine/src/detectors/openai-key.ts
-var RE6 = /\bsk-(?!ant-)(?:proj-[A-Za-z0-9_-]{20,}|[A-Za-z0-9]{48})\b/g;
+var RE6 = /\bsk-(?!ant-)(?:proj-[A-Za-z0-9_-]{20,}(?!\w)|[A-Za-z0-9]{48}\b)/g;
 var openaiKey = {
   id: "openai_key",
   label: "OpenAI API key",
@@ -246,7 +246,8 @@ var stripeLiveKey = {
 };
 
 // packages/engine/src/detectors/private-key.ts
-var BLOCK = /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----/g;
+var BEGIN = /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----/g;
+var END = /-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----/g;
 var privateKey = {
   id: "private_key",
   label: "Private key block",
@@ -255,9 +256,14 @@ var privateKey = {
   rationale: "A PEM private key authenticates as you; anyone who reads it can impersonate the key holder.",
   scan(text) {
     const out = [];
-    for (const m of text.matchAll(BLOCK)) {
-      const start = m.index;
-      out.push({ start, end: start + m[0].length, match: m[0] });
+    BEGIN.lastIndex = 0;
+    for (let b = BEGIN.exec(text); b !== null; b = BEGIN.exec(text)) {
+      END.lastIndex = b.index + b[0].length;
+      const e = END.exec(text);
+      if (e === null) break;
+      const end = e.index + e[0].length;
+      out.push({ start: b.index, end, match: text.slice(b.index, end) });
+      BEGIN.lastIndex = end;
     }
     return out;
   },
@@ -323,13 +329,37 @@ var envSecret = {
 };
 
 // packages/engine/src/detectors/db-connection-string.ts
-var RE10 = /\b[a-z][a-z0-9+.-]*:\/\/[^\s:@/]*:[^\s:@/]+@[^\s/]+/gi;
+var TAIL = /[^\s:@/]*:[^\s:@/]+@[^\s/]+/y;
+var SCHEME = /[A-Za-z0-9+.-]/;
+var LETTER = /[A-Za-z]/;
+var WORD = /[A-Za-z0-9_]/;
+var isWord = (c) => c !== void 0 && WORD.test(c);
+function scanConnectionStrings(text) {
+  const out = [];
+  let from = 0;
+  for (let at = text.indexOf("://", from); at !== -1; at = text.indexOf("://", from)) {
+    let run = at;
+    while (run > 0 && SCHEME.test(text[run - 1])) run--;
+    let start = run;
+    while (start < at && !(LETTER.test(text[start]) && isWord(text[start - 1]) === false)) start++;
+    TAIL.lastIndex = at + 3;
+    const m = start < at ? TAIL.exec(text) : null;
+    if (m === null) {
+      from = at + 3;
+      continue;
+    }
+    const end = at + 3 + m[0].length;
+    out.push({ start, end, match: text.slice(start, end) });
+    from = end;
+  }
+  return out;
+}
 var dbConnectionString = {
   id: "db_connection_string",
   label: "Connection string with credentials",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE10, text),
+  scan: scanConnectionStrings,
   fixtures: {
     positives: [
       "postgres://admin:s3cret@db.example.com:5432/app",
@@ -347,13 +377,13 @@ var dbConnectionString = {
 };
 
 // packages/engine/src/detectors/jwt.ts
-var RE11 = /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g;
+var RE10 = /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g;
 var jwt = {
   id: "jwt",
   label: "JSON Web Token",
   severity: "warning",
   defaultEnabled: false,
-  scan: (text) => matchAll(RE11, text),
+  scan: (text) => matchAll(RE10, text),
   fixtures: {
     positives: [
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
@@ -412,13 +442,13 @@ var genericHighEntropy = {
 };
 
 // packages/engine/src/detectors/internal-hostname.ts
-var RE12 = /\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:internal|local|corp|lan|intranet)\b/gi;
+var RE11 = /\b(?=[a-z0-9.-]{0,253}\.(?:internal|local|corp|lan|intranet)\b)(?:(?=[a-z0-9])(?=([a-z0-9-]{1,63}))\1(?<=[a-z0-9])\.){1,127}(?:internal|local|corp|lan|intranet)\b/gi;
 var internalHostname = {
   id: "internal_hostname",
   label: "Internal hostname",
   severity: "warning",
   defaultEnabled: false,
-  scan: (text) => matchAll(RE12, text),
+  scan: (text) => matchAll(RE11, text),
   fixtures: {
     positives: ["db01.internal", "app.server.corp", "gateway.intranet"],
     negatives: ["example.com", "www.google.com", "just some plain text"]
@@ -426,13 +456,13 @@ var internalHostname = {
 };
 
 // packages/engine/src/detectors/private-ip.ts
-var RE13 = /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|127\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g;
+var RE12 = /\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|127\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/g;
 var privateIp = {
   id: "private_ip",
   label: "Private IP address",
   severity: "warning",
   defaultEnabled: false,
-  scan: (text) => matchAll(RE13, text),
+  scan: (text) => matchAll(RE12, text),
   fixtures: {
     positives: ["10.0.0.5", "192.168.1.1", "172.31.255.254"],
     negatives: [
@@ -446,14 +476,39 @@ var privateIp = {
 };
 
 // packages/engine/src/detectors/email.ts
-var RE14 = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+var DOMAIN = /[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/y;
+var LOCAL = /[A-Za-z0-9._%+-]/;
+var WORD2 = /[A-Za-z0-9_]/;
+var isLocal = (c) => c !== void 0 && LOCAL.test(c);
+var isWord2 = (c) => c !== void 0 && WORD2.test(c);
+var boundaryAt = (text, p) => isWord2(text[p - 1]) !== isWord2(text[p]);
+function scanEmails(text) {
+  const out = [];
+  let from = 0;
+  for (let at = text.indexOf("@", from); at !== -1; at = text.indexOf("@", from)) {
+    let run = at;
+    while (run > from && isLocal(text[run - 1])) run--;
+    let start = run;
+    while (start < at && !boundaryAt(text, start)) start++;
+    DOMAIN.lastIndex = at + 1;
+    const m = start < at ? DOMAIN.exec(text) : null;
+    if (m === null) {
+      from = at + 1;
+      continue;
+    }
+    const end = at + 1 + m[0].length;
+    out.push({ start, end, match: text.slice(start, end) });
+    from = end;
+  }
+  return out;
+}
 var email = {
   id: "email",
   label: "Email address",
   severity: "warning",
   defaultEnabled: false,
   rationale: "An email address is personal data (PII); redact it if the recipient should not see it.",
-  scan: (text) => matchAll(RE14, text),
+  scan: scanEmails,
   fixtures: {
     positives: ["john.doe@example.com", "a_b+c@mail.co.uk", "user@sub.domain.org"],
     negatives: [
@@ -466,13 +521,13 @@ var email = {
 };
 
 // packages/engine/src/detectors/gitlab-pat.ts
-var RE15 = /\bglpat-[0-9A-Za-z_-]{20}\b/g;
+var RE13 = /\bglpat-[0-9A-Za-z_-]{20}(?!\w)/g;
 var gitlabPat = {
   id: "gitlab_pat",
   label: "GitLab personal access token",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE15, text),
+  scan: (text) => matchAll(RE13, text),
   fixtures: {
     positives: [
       "glpat-" + "a".repeat(20),
@@ -484,13 +539,13 @@ var gitlabPat = {
 };
 
 // packages/engine/src/detectors/npm-token.ts
-var RE16 = /\bnpm_[0-9A-Za-z]{36}\b/g;
+var RE14 = /\bnpm_[0-9A-Za-z]{36}\b/g;
 var npmToken = {
   id: "npm_token",
   label: "npm access token",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE16, text),
+  scan: (text) => matchAll(RE14, text),
   fixtures: {
     positives: [
       "npm_" + "a".repeat(36),
@@ -502,13 +557,13 @@ var npmToken = {
 };
 
 // packages/engine/src/detectors/sendgrid-key.ts
-var RE17 = /\bSG\.[0-9A-Za-z_-]{22}\.[0-9A-Za-z_-]{43}\b/g;
+var RE15 = /\bSG\.[0-9A-Za-z_-]{22}\.[0-9A-Za-z_-]{43}(?!\w)/g;
 var sendgridKey = {
   id: "sendgrid_key",
   label: "SendGrid API key",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE17, text),
+  scan: (text) => matchAll(RE15, text),
   fixtures: {
     positives: [
       "SG." + "a".repeat(22) + "." + "b".repeat(43),
@@ -520,13 +575,13 @@ var sendgridKey = {
 };
 
 // packages/engine/src/detectors/twilio-key.ts
-var RE18 = /\bSK[0-9a-f]{32}\b/g;
+var RE16 = /\bSK[0-9a-f]{32}\b/g;
 var twilioKey = {
   id: "twilio_key",
   label: "Twilio API key",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE18, text),
+  scan: (text) => matchAll(RE16, text),
   fixtures: {
     positives: [
       "SK" + "0123456789abcdef".repeat(2),
@@ -538,13 +593,13 @@ var twilioKey = {
 };
 
 // packages/engine/src/detectors/google-oauth-secret.ts
-var RE19 = /\bGOCSPX-[0-9A-Za-z_-]{28}\b/g;
+var RE17 = /\bGOCSPX-[0-9A-Za-z_-]{28}\b/g;
 var googleOauthSecret = {
   id: "google_oauth_secret",
   label: "Google OAuth client secret",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE19, text),
+  scan: (text) => matchAll(RE17, text),
   fixtures: {
     positives: [
       "GOCSPX-" + "a".repeat(28),
@@ -556,13 +611,13 @@ var googleOauthSecret = {
 };
 
 // packages/engine/src/detectors/shopify-token.ts
-var RE20 = /\bshp(?:at|ca|pa|ss)_[0-9a-f]{32}\b/g;
+var RE18 = /\bshp(?:at|ca|pa|ss)_[0-9a-f]{32}\b/g;
 var shopifyToken = {
   id: "shopify_token",
   label: "Shopify access token",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE20, text),
+  scan: (text) => matchAll(RE18, text),
   fixtures: {
     positives: [
       "shpat_" + "a".repeat(32),
@@ -574,13 +629,13 @@ var shopifyToken = {
 };
 
 // packages/engine/src/detectors/huggingface-token.ts
-var RE21 = /\bhf_[0-9A-Za-z]{34}\b/g;
+var RE19 = /\bhf_[0-9A-Za-z]{34}\b/g;
 var huggingfaceToken = {
   id: "huggingface_token",
   label: "Hugging Face token",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE21, text),
+  scan: (text) => matchAll(RE19, text),
   fixtures: {
     positives: ["hf_" + "a".repeat(34), "HF_TOKEN=hf_" + "A1b2".repeat(8) + "cd", "hf_" + "x".repeat(34)],
     negatives: ["hf_short", "half of the dataset", "a hugging face model card"]
@@ -588,13 +643,13 @@ var huggingfaceToken = {
 };
 
 // packages/engine/src/detectors/digitalocean-token.ts
-var RE22 = /\bdo[opr]_v1_[0-9a-f]{64}\b/g;
+var RE20 = /\bdo[opr]_v1_[0-9a-f]{64}\b/g;
 var digitaloceanToken = {
   id: "digitalocean_token",
   label: "DigitalOcean token",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE22, text),
+  scan: (text) => matchAll(RE20, text),
   fixtures: {
     positives: [
       "dop_v1_" + "0123456789abcdef".repeat(4),
@@ -606,13 +661,13 @@ var digitaloceanToken = {
 };
 
 // packages/engine/src/detectors/postman-key.ts
-var RE23 = /\bPMAK-[0-9a-f]{24}-[0-9a-f]{34}\b/g;
+var RE21 = /\bPMAK-[0-9a-f]{24}-[0-9a-f]{34}\b/g;
 var postmanKey = {
   id: "postman_key",
   label: "Postman API key",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE23, text),
+  scan: (text) => matchAll(RE21, text),
   fixtures: {
     positives: [
       "PMAK-" + "a".repeat(24) + "-" + "b".repeat(34),
@@ -624,13 +679,13 @@ var postmanKey = {
 };
 
 // packages/engine/src/detectors/linear-key.ts
-var RE24 = /\blin_api_[0-9A-Za-z]{40}\b/g;
+var RE22 = /\blin_api_[0-9A-Za-z]{40}\b/g;
 var linearKey = {
   id: "linear_key",
   label: "Linear API key",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE24, text),
+  scan: (text) => matchAll(RE22, text),
   fixtures: {
     positives: ["lin_api_" + "a".repeat(40), "lin_api_" + "A1b2".repeat(10), "lin_api_" + "0".repeat(40)],
     negatives: ["lin_api_short", "the linear app", "lin_api_ has a space"]
@@ -638,13 +693,13 @@ var linearKey = {
 };
 
 // packages/engine/src/detectors/square-token.ts
-var RE25 = /\bsq0(?:atp|csp)-[0-9A-Za-z_-]{22,}\b/g;
+var RE23 = /\bsq0(?:atp|csp)-[0-9A-Za-z_-]{22,}(?!\w)/g;
 var squareToken = {
   id: "square_token",
   label: "Square access token",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE25, text),
+  scan: (text) => matchAll(RE23, text),
   fixtures: {
     positives: [
       "sq0atp-" + "a".repeat(22),
@@ -656,13 +711,13 @@ var squareToken = {
 };
 
 // packages/engine/src/detectors/stripe-webhook-secret.ts
-var RE26 = /\bwhsec_[0-9A-Za-z]{32,}\b/g;
+var RE24 = /\bwhsec_[0-9A-Za-z]{32,}\b/g;
 var stripeWebhookSecret = {
   id: "stripe_webhook_secret",
   label: "Stripe webhook secret",
   severity: "critical",
   defaultEnabled: true,
-  scan: (text) => matchAll(RE26, text),
+  scan: (text) => matchAll(RE24, text),
   fixtures: {
     positives: [
       "whsec_" + "a".repeat(32),
@@ -849,56 +904,56 @@ var indiaAadhaar = {
 };
 
 // packages/engine/src/detectors/generated.ts
-var RE_0 = new RegExp("\\b[0-9a-f]{32}-us\\d{1,2}\\b", "g");
-var RE_1 = new RegExp("\\bkey-[0-9a-zA-Z]{32}\\b", "g");
-var RE_2 = new RegExp("\\bNRAK-[A-Z0-9]{27}\\b", "g");
-var RE_3 = new RegExp("\\bpypi-AgEI[A-Za-z0-9_-]{50,}\\b", "g");
-var RE_4 = new RegExp("\\bdp\\.pt\\.[A-Za-z0-9]{43}\\b", "g");
-var RE_5 = new RegExp("\\bglsa_[A-Za-z0-9]{32}_[a-f0-9]{8}\\b", "g");
-var RE_6 = new RegExp("\\bdapi[0-9a-f]{32}\\b", "g");
-var RE_7 = new RegExp("\\b\\d{8,10}:[A-Za-z0-9_-]{35}\\b", "g");
-var RE_8 = new RegExp("\\bxkeysib-[a-f0-9]{64}-[A-Za-z0-9]{16}\\b", "g");
-var RE_9 = new RegExp("\\bpscale_tkn_[A-Za-z0-9_-]{32,}\\b", "g");
-var RE_10 = new RegExp("\\bsk-or-v1-[0-9a-f]{40,}\\b", "g");
-var RE_11 = new RegExp("\\bgsk_[A-Za-z0-9]{52}\\b", "g");
-var RE_12 = new RegExp("\\bpplx-[A-Za-z0-9]{40,}\\b", "g");
-var RE_13 = new RegExp("\\br8_[A-Za-z0-9]{37}\\b", "g");
-var RE_14 = new RegExp("\\bntn_[0-9A-Za-z]{40,}\\b", "g");
-var RE_15 = new RegExp("\\b[MNO][A-Za-z0-9_-]{23,25}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{27,38}\\b", "g");
-var RE_16 = new RegExp("\\bfigd_[0-9A-Za-z_.-]{40,}\\b", "g");
-var RE_17 = new RegExp("\\bpat[0-9A-Za-z]{14}\\.[0-9A-Za-z_-]{40,}\\b", "g");
-var RE_18 = new RegExp("\\b[A-Za-z0-9]{14}\\.atlasv1\\.[A-Za-z0-9_-]{60,}\\b", "g");
-var RE_19 = new RegExp("\\bsl\\.[A-Za-z0-9_-]{130,}\\b", "g");
-var RE_20 = new RegExp("\\bxai-[A-Za-z0-9]{80}\\b", "g");
-var RE_21 = new RegExp("\\bFLWSECK[_-][0-9A-Za-z-]{20,}\\b", "g");
-var RE_22 = new RegExp("\\brzp_(?:live|test)_[0-9A-Za-z]{14,}\\b", "g");
-var RE_23 = new RegExp("\\bfw_[0-9A-Za-z]{24,}\\b", "g");
-var RE_24 = new RegExp("\\bATATT3x[A-Za-z0-9_=+/.-]{150,}\\b", "g");
-var RE_25 = new RegExp("\\btskey-(?:auth|api|client)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{20,}\\b", "g");
-var RE_26 = new RegExp("\\bre_(?=[A-Za-z0-9_]*\\d)[A-Za-z0-9_]{22,}\\b", "g");
-var RE_27 = new RegExp("\\bhvs\\.[A-Za-z0-9._-]{90,120}\\b", "g");
-var RE_28 = new RegExp("\\bdt0c01\\.[A-Za-z0-9_]{24}\\.[A-Za-z0-9_]{64}\\b", "g");
+var RE_0 = new RegExp("\\b[0-9a-f]{32}-us\\d{1,2}(?!\\w)", "g");
+var RE_1 = new RegExp("\\bkey-[0-9a-zA-Z]{32}(?!\\w)", "g");
+var RE_2 = new RegExp("\\bNRAK-[A-Z0-9]{27}(?!\\w)", "g");
+var RE_3 = new RegExp("\\bpypi-AgEI[A-Za-z0-9_-]{50,}(?!\\w)", "g");
+var RE_4 = new RegExp("\\bdp\\.pt\\.[A-Za-z0-9]{43}(?!\\w)", "g");
+var RE_5 = new RegExp("\\bglsa_[A-Za-z0-9]{32}_[a-f0-9]{8}(?!\\w)", "g");
+var RE_6 = new RegExp("\\bdapi[0-9a-f]{32}(?!\\w)", "g");
+var RE_7 = new RegExp("\\b\\d{8,10}:[A-Za-z0-9_-]{35}(?!\\w)", "g");
+var RE_8 = new RegExp("\\bxkeysib-[a-f0-9]{64}-[A-Za-z0-9]{16}(?!\\w)", "g");
+var RE_9 = new RegExp("\\bpscale_tkn_[A-Za-z0-9_-]{32,}(?!\\w)", "g");
+var RE_10 = new RegExp("\\bsk-or-v1-[0-9a-f]{40,}(?!\\w)", "g");
+var RE_11 = new RegExp("\\bgsk_[A-Za-z0-9]{52}(?!\\w)", "g");
+var RE_12 = new RegExp("\\bpplx-[A-Za-z0-9]{40,}(?!\\w)", "g");
+var RE_13 = new RegExp("\\br8_[A-Za-z0-9]{37}(?!\\w)", "g");
+var RE_14 = new RegExp("\\bntn_[0-9A-Za-z]{40,}(?!\\w)", "g");
+var RE_15 = new RegExp("\\b[MNO][A-Za-z0-9_-]{23,25}\\.[A-Za-z0-9_-]{6}\\.[A-Za-z0-9_-]{27,38}(?!\\w)", "g");
+var RE_16 = new RegExp("\\bfigd_[0-9A-Za-z_.-]{40,}(?!\\w)", "g");
+var RE_17 = new RegExp("\\bpat[0-9A-Za-z]{14}\\.[0-9A-Za-z_-]{40,}(?!\\w)", "g");
+var RE_18 = new RegExp("\\b[A-Za-z0-9]{14}\\.atlasv1\\.[A-Za-z0-9_-]{60,}(?!\\w)", "g");
+var RE_19 = new RegExp("\\bsl\\.[A-Za-z0-9_-]{130,}(?!\\w)", "g");
+var RE_20 = new RegExp("\\bxai-[A-Za-z0-9]{80}(?!\\w)", "g");
+var RE_21 = new RegExp("\\bFLWSECK[_-][0-9A-Za-z-]{20,}(?!\\w)", "g");
+var RE_22 = new RegExp("\\brzp_(?:live|test)_[0-9A-Za-z]{14,}(?!\\w)", "g");
+var RE_23 = new RegExp("\\bfw_[0-9A-Za-z]{24,}(?!\\w)", "g");
+var RE_24 = new RegExp("\\bATATT3x[A-Za-z0-9_=+/.-]{150,}(?!\\w)", "g");
+var RE_25 = new RegExp("\\btskey-(?:auth|api|client)-[A-Za-z0-9]{10,}-[A-Za-z0-9]{20,}(?!\\w)", "g");
+var RE_26 = new RegExp("\\bre_(?=[A-Za-z0-9_]*\\d)[A-Za-z0-9_]{22,}(?!\\w)", "g");
+var RE_27 = new RegExp("\\bhvs\\.[A-Za-z0-9._-]{90,120}(?!\\w)", "g");
+var RE_28 = new RegExp("\\bdt0c01\\.[A-Za-z0-9_]{24}\\.[A-Za-z0-9_]{64}(?!\\w)", "g");
 var RE_29 = new RegExp("\\btfp_[A-Za-z0-9._=-]{59}", "g");
-var RE_30 = new RegExp("\\bpnu_[A-Za-z0-9_]{36}\\b", "g");
-var RE_31 = new RegExp("\\brubygems_[a-f0-9_]{48}\\b", "g");
-var RE_32 = new RegExp("\\bCLOJARS_[A-Za-z0-9_]{60}\\b", "g");
+var RE_30 = new RegExp("\\bpnu_[A-Za-z0-9_]{36}(?!\\w)", "g");
+var RE_31 = new RegExp("\\brubygems_[a-f0-9_]{48}(?!\\w)", "g");
+var RE_32 = new RegExp("\\bCLOJARS_[A-Za-z0-9_]{60}(?!\\w)", "g");
 var RE_33 = new RegExp("\\bduffel_(?:test|live)_[A-Za-z0-9._=-]{43}", "g");
 var RE_34 = new RegExp("\\bfio-u-[A-Za-z0-9._=-]{64}", "g");
-var RE_35 = new RegExp("\\bshippo_(?:live|test)_[a-fA-F0-9_]{40}\\b", "g");
-var RE_36 = new RegExp("\\bEZAK[A-Za-z0-9_]{54}\\b", "g");
-var RE_37 = new RegExp("\\bLTAI[A-Za-z0-9_]{20}\\b", "g");
-var RE_38 = new RegExp("\\bAGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L_]{58}\\b", "g");
-var RE_39 = new RegExp("\\brdme_[a-z0-9_]{70}\\b", "g");
-var RE_40 = new RegExp("\\bs-s4t2(?:ud|af)-[a-f0-9_]{64}\\b", "g");
-var RE_41 = new RegExp("\\bEAA[MC][A-Za-z0-9_]{100,}\\b", "g");
-var RE_42 = new RegExp("\\bsntryu_[a-f0-9_]{64}\\b", "g");
-var RE_43 = new RegExp("\\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}\\b", "g");
-var RE_44 = new RegExp("\\b9\\d{2}-[5-9]\\d-\\d{4}\\b", "g");
-var RE_45 = new RegExp("\\b0x[a-fA-F0-9]{40}\\b", "g");
-var RE_46 = new RegExp("\\bbc1[a-z0-9]{25,39}\\b", "g");
-var RE_47 = new RegExp("\\+[1-9]\\d{7,14}\\b", "g");
-var RE_48 = new RegExp("\\b[A-Z]{3}[ABCFGHLJPT][A-Z]\\d{4}[A-Z]\\b", "g");
-var RE_49 = new RegExp("\\b[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\\d{6}[A-D]\\b", "g");
+var RE_35 = new RegExp("\\bshippo_(?:live|test)_[a-fA-F0-9_]{40}(?!\\w)", "g");
+var RE_36 = new RegExp("\\bEZAK[A-Za-z0-9_]{54}(?!\\w)", "g");
+var RE_37 = new RegExp("\\bLTAI[A-Za-z0-9_]{20}(?!\\w)", "g");
+var RE_38 = new RegExp("\\bAGE-SECRET-KEY-1[QPZRY9X8GF2TVDW0S3JN54KHCE6MUA7L_]{58}(?!\\w)", "g");
+var RE_39 = new RegExp("\\brdme_[a-z0-9_]{70}(?!\\w)", "g");
+var RE_40 = new RegExp("\\bs-s4t2(?:ud|af)-[a-f0-9_]{64}(?!\\w)", "g");
+var RE_41 = new RegExp("\\bEAA[MC][A-Za-z0-9_]{100,}(?!\\w)", "g");
+var RE_42 = new RegExp("\\bsntryu_[a-f0-9_]{64}(?!\\w)", "g");
+var RE_43 = new RegExp("\\b[5KL][1-9A-HJ-NP-Za-km-z]{50,51}(?!\\w)", "g");
+var RE_44 = new RegExp("\\b9\\d{2}-[5-9]\\d-\\d{4}(?!\\w)", "g");
+var RE_45 = new RegExp("\\b0x[a-fA-F0-9]{40}(?!\\w)", "g");
+var RE_46 = new RegExp("\\bbc1[a-z0-9]{25,39}(?!\\w)", "g");
+var RE_47 = new RegExp("\\+[1-9]\\d{7,14}(?!\\w)", "g");
+var RE_48 = new RegExp("\\b[A-Z]{3}[ABCFGHLJPT][A-Z]\\d{4}[A-Z](?!\\w)", "g");
+var RE_49 = new RegExp("\\b[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]\\d{6}[A-D](?!\\w)", "g");
 var generated = [
   {
     id: "mailchimp_key",

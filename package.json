@@ -11,15 +11,17 @@
     "packages/cli"
   ],
   "scripts": {
-    "test": "npm run test --workspaces --if-present",
+    "build:engine": "npm run build --workspace @sbr0nch/contextia-engine",
+    "test": "npm run build:engine && npm run test --workspaces --if-present",
     "verify": "npm run typecheck && npm test && npm run acceptance && npm run build",
     "acceptance": "npm run acceptance --workspace @sbr0nch/contextia-engine",
     "build": "npm run build --workspaces --if-present && node plugins/contextia/build.mjs",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run build:engine && npm run typecheck --workspaces --if-present",
     "preflight": "node scripts/preflight.mjs",
     "test:docs": "npm run build --workspace @sbr0nch/contextia && node scripts/docs-commands.mjs",
-    "test:dom": "npm run test:dom --workspace @sbr0nch/contextia-extension",
-    "test:proxy": "npm run test:proxy --workspace @sbr0nch/contextia",
+    "test:dom": "npm run build:engine && npm run test:dom --workspace @sbr0nch/contextia-extension",
+    "test:proxy": "npm run build:engine && npm run test:proxy --workspace @sbr0nch/contextia",
+    "test:clean": "node scripts/test-clean-clone.mjs",
     "test:pack": "node scripts/test-packaging.mjs"
   },
   "engines": {

@@ -1,7 +1,9 @@
 import type { Detector } from '../types.js'
 import { matchAll } from './_util.js'
 
-const RE = /\bSG\.[0-9A-Za-z_-]{22}\.[0-9A-Za-z_-]{43}\b/g
+// (?!\w) rather than \b after a class that holds "-": \b needs a word character next, so a
+// token ending in "-" was not matched whole. Same as \b after a letter or a digit.
+const RE = /\bSG\.[0-9A-Za-z_-]{22}\.[0-9A-Za-z_-]{43}(?!\w)/g
 
 export const sendgridKey: Detector = {
   id: 'sendgrid_key',

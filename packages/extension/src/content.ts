@@ -168,9 +168,18 @@ function doRedact(action: LogAction): void {
   setTimeout(scan, 0)
 }
 
+// The findings the handlers decide from come from a scan that runs 150 ms after
+// the last input. A send that lands inside that window used to be decided from
+// stale findings and went through. Rescan right now, before every decision.
+function decide(): boolean {
+  if (settings.mode === 'off') return false
+  scan()
+  return needsAttention({ findings, truncated: scanTruncated }, settings.mode)
+}
+
 function onKeydown(e: KeyboardEvent): void {
-  if (!needsAttention({ findings, truncated: scanTruncated }, settings.mode)) return
   if (e.key !== 'Enter' || e.shiftKey) return
+  if (!decide()) return
   if (settings.mode === 'block') blockSubmit(e)
   else if (settings.mode === 'warn') markLeaked()
 }
@@ -178,14 +187,14 @@ function onKeydown(e: KeyboardEvent): void {
 // Block mode stops a click on the send button; warn mode lets it through but
 // records that the flagged secret was sent anyway.
 function onSendClick(e: MouseEvent): void {
-  if (!needsAttention({ findings, truncated: scanTruncated }, settings.mode)) return
   if (!isSendTarget(e.target)) return
+  if (!decide()) return
   if (settings.mode === 'block') blockSubmit(e)
   else if (settings.mode === 'warn') markLeaked()
 }
 
 function onSubmit(e: Event): void {
-  if (!needsAttention({ findings, truncated: scanTruncated }, settings.mode)) return
+  if (!decide()) return
   if (settings.mode === 'block') blockSubmit(e)
   else if (settings.mode === 'warn') markLeaked()
 }

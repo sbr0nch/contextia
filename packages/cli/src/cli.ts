@@ -1,9 +1,9 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import type { AddressInfo } from 'node:net'
-import { detectDetailed, redact, detectors, type Finding } from '@sbr0nch/contextia-engine'
-import { configFor, locate, maskValue, type ScanOptions } from './core.js'
+import { redact, detectors, type Finding } from '@sbr0nch/contextia-engine'
+import { configFor, detectAll, locate, maskValue, type ScanOptions } from './core.js'
 import { startProxy, createProxyServer, type ProxyMode, type CustomRules } from './proxy.js'
 
 declare const __CONTEXTIA_VERSION__: string
@@ -35,18 +35,33 @@ function flagValue(name: string): string | undefined {
 
 // Directories a scan should never descend into. Scanning a dependency tree
 // finds other people's fixtures, not your secrets, and buries the real hits.
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'dist-firefox', 'coverage', '.next', 'build', 'vendor'])
+const SKIP_DIRS = new Set(['node_modules', '.git', '.hg', '.svn', '.venv', 'dist', 'dist-firefox', 'coverage', '.next', 'build', 'vendor'])
 
 // Binary-ish extensions: reading them as utf8 produces noise, not findings.
 const SKIP_EXT = /\.(png|jpe?g|gif|webp|ico|svg|pdf|zip|gz|tgz|xz|7z|rar|mp[34]|mov|woff2?|ttf|eot|wasm|so|dylib|dll|exe|class|jar|pyc|lock)$/i
 
-function walk(dir: string, out: string[]): void {
+// Dotfiles are read: `.env.production`, `.aws/credentials`, `.npmrc` and `.netrc`
+// are where secrets live. A symlink to a file is read; a symlink to a directory
+// is not followed, so a loop cannot trap the walk.
+function walk(dir: string, out: string[], seen: Set<string> = new Set()): void {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
-    if (e.name.startsWith('.') && e.name !== '.env') continue
     const full = join(dir, e.name)
-    if (e.isDirectory()) {
-      if (!SKIP_DIRS.has(e.name)) walk(full, out)
-    } else if (e.isFile() && !SKIP_EXT.test(e.name)) {
+    const dirLike = e.isDirectory()
+    let fileLike = e.isFile()
+    if (e.isSymbolicLink()) {
+      try {
+        fileLike = statSync(full).isFile()
+      } catch {
+        continue // dangling link
+      }
+    }
+    if (dirLike) {
+      if (!SKIP_DIRS.has(e.name)) walk(full, out, seen)
+    } else if (fileLike && !SKIP_EXT.test(e.name)) {
+      // the same file under two names (a symlink inside the tree) is read once
+      const real = realpathSync(full)
+      if (seen.has(real)) continue
+      seen.add(real)
       out.push(full)
     }
   }
@@ -92,14 +107,7 @@ function cmdScan(): void {
   const rows: Array<Record<string, unknown>> = []
   let total = 0
   for (const { name, text } of inputs()) {
-    const scan = detectDetailed(text, config)
-    if (scan.truncated) {
-      process.stderr.write(
-        `contextia: WARNING ${name} is ${text.length} chars; only the first ${scan.scannedLength} were scanned. ` +
-          `The rest was NOT checked.\n`,
-      )
-    }
-    for (const f of locate(text, scan.findings)) {
+    for (const f of locate(text, detectAll(text, config))) {
       total++
       if (json) {
         rows.push({ file: name, line: f.line, col: f.col, type: f.type, severity: f.severity, preview: maskValue(f.match), rationale: f.rationale })
@@ -113,20 +121,15 @@ function cmdScan(): void {
   }
   if (json) process.stdout.write(JSON.stringify(rows, null, 2) + '\n')
   else process.stderr.write(`\n${total} secret${total === 1 ? '' : 's'} found\n`)
-  process.exit(total > 0 ? 1 : 0)
+  // Not process.exit(): stdout may be a pipe, which is written asynchronously, and
+  // exiting here cut a large --json output at 65,536 bytes. Let the stream drain.
+  process.exitCode = total > 0 ? 1 : 0
 }
 
 function cmdRedact(): void {
   const config = configFor(opts)
-  for (const { name, text } of inputs()) {
-    const scan = detectDetailed(text, config)
-    if (scan.truncated) {
-      process.stderr.write(
-        `contextia: WARNING ${name} is ${text.length} chars; only the first ${scan.scannedLength} were scanned, ` +
-          `so the output past that point is NOT redacted.\n`,
-      )
-    }
-    process.stdout.write(redact(text, scan.findings))
+  for (const { text } of inputs()) {
+    process.stdout.write(redact(text, detectAll(text, config)))
   }
 }
 
@@ -158,11 +161,19 @@ function findingLogger(mode: ProxyMode): (f: Finding[], info: { path: string }) 
   }
 }
 
+function validPort(raw: string | undefined): number {
+  const text = raw ?? '8787'
+  const n = Number(text)
+  if (text.trim() !== '' && Number.isInteger(n) && n >= 0 && n <= 65535) return n
+  process.stderr.write(`contextia: invalid --port '${text}' (use a whole number from 0 to 65535)\n`)
+  process.exit(2)
+}
+
 function cmdProxy(): void {
   const mode = flagValue('--mode') ?? 'redact'
   if (!validMode(mode)) return
   startProxy({
-    port: Number(flagValue('--port') ?? '8787'),
+    port: validPort(flagValue('--port')),
     mode,
     host: flagValue('--host'),
     upstream: flagValue('--upstream'),
@@ -324,7 +335,14 @@ if (command === 'version' || flags.has('--version') || argv.includes('-v')) {
     case 'list':
       cmdList()
       break
-    default:
+    case 'help':
+    case '--help':
+    case '-h':
       cmdHelp()
+      break
+    default:
+      // Help for a typo would exit 0, and in a pre-commit hook that reads as clean.
+      process.stderr.write(`contextia: unknown command '${command}'. Run 'contextia help' for the list.\n`)
+      process.exit(2)
   }
 }
