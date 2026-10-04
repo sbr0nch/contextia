@@ -9,6 +9,7 @@ import {
   type CustomRules,
 } from '@sbr0nch/contextia-engine'
 import { detectAll } from './core.js'
+import { childPath, indexJson, patchJson, type JsonIndex } from './json.js'
 
 export type ProxyMode = 'warn' | 'redact' | 'block'
 export type { CustomRules }
@@ -57,6 +58,7 @@ const unscannableDetail = (limit: number): Record<UnscannableReason, string> => 
   oversize: `larger than the ${mb(limit)} scan cap`,
   encoding: `unsupported content-encoding, or larger than the ${mb(limit)} scan cap once decompressed`,
   unparsable: 'not JSON we understand',
+  ambiguous: 'a key appears twice, and parsers disagree about which value counts',
 })
 
 /** A secret-free browser catch, reported to the local dashboard. Counts only. */
@@ -147,6 +149,8 @@ interface TextNode {
   set(value: string): void
   /** Conversational text (system prompt, message text). Only this carries the signature note. */
   prose: boolean
+  /** Where it sits in the body, as json.ts indexes it: lets an edit be applied to the original text. */
+  path: string
 }
 
 type Slot = { container: Record<string, unknown> | unknown[]; key: string | number }
@@ -204,16 +208,16 @@ export function* textNodes(body: unknown): Generator<TextNode> {
     ? body.map((_, i) => i)
     : [...LEAD_KEYS.filter((k) => k in root), ...Object.keys(root).filter((k) => !lead.has(k))]
 
-  const stack: Array<{ container: Record<string, unknown> | unknown[]; key: string | number; prose: boolean }> = []
-  for (const k of [...order].reverse()) stack.push({ container: root, key: k, prose: k === 'system' || k === 'messages' })
+  const stack: Array<{ container: Record<string, unknown> | unknown[]; key: string | number; prose: boolean; path: string }> = []
+  for (const k of [...order].reverse()) stack.push({ container: root, key: k, prose: k === 'system' || k === 'messages', path: childPath('', k) })
 
   while (stack.length) {
-    const { container, key, prose } = stack.pop()!
+    const { container, key, prose, path } = stack.pop()!
     const value = (container as Record<string | number, unknown>)[key]
     if (typeof value === 'string') {
       if (isOpaque(container, key, value)) continue
       const slot: Slot = { container, key }
-      yield { get: () => slotGet(slot) as string, set: (v) => slotSet(slot, v), prose }
+      yield { get: () => slotGet(slot) as string, set: (v) => slotSet(slot, v), prose, path }
     } else if (value && typeof value === 'object') {
       // Prose stays prose only along the path system/messages -> content -> text.
       // A tool call's input or a tool result's content is data, not conversation.
@@ -222,7 +226,7 @@ export function* textNodes(body: unknown): Generator<TextNode> {
       const keys = Array.isArray(value) ? value.map((_, i) => i) : Object.keys(o)
       for (const k of [...keys].reverse()) {
         const childProse = prose && !dataBlock && (Array.isArray(value) || k === 'content' || k === 'text' || k === 'system')
-        stack.push({ container: value as Record<string, unknown>, key: k, prose: childProse })
+        stack.push({ container: value as Record<string, unknown>, key: k, prose: childProse, path: childPath(path, k) })
       }
     }
   }
@@ -244,6 +248,8 @@ export function processPayload(
   custom?: CustomRules,
   vault?: Map<string, string>,
   signature?: boolean,
+  /** Receives each rewritten string by path, so the edit can be applied to the original text. */
+  edits?: Map<string, string>,
 ): Finding[] {
   const findings: Finding[] = []
   let noted = false
@@ -268,10 +274,53 @@ export function processPayload(
           noted = true
         }
         node.set(out)
+        edits?.set(node.path, out)
       }
     }
   }
   return findings
+}
+
+/**
+ * The object keys of a body. A key is a string a client can put anything in, and the walk
+ * above reads values only: a secret used as a key (`{"AKIA...": 1}`) went upstream unseen.
+ * Each distinct key is scanned once; a body repeats the same few ("role", "content").
+ */
+export function processKeys(
+  index: JsonIndex,
+  mode: ProxyMode,
+  config: Config,
+  custom?: CustomRules,
+  vault?: Map<string, string>,
+): { findings: Finding[]; edits: Map<number, string> } {
+  const findings: Finding[] = []
+  const edits = new Map<number, string>()
+  const verdict = new Map<string, string | null>() // key -> its redacted form, or null when clean
+  for (const tok of index.keys) {
+    let redacted = verdict.get(tok.key)
+    if (redacted === undefined) {
+      const found = [...detectAll(tok.key, config), ...(custom ? customFindings(tok.key, custom) : [])]
+      redacted = null
+      if (found.length) {
+        findings.push(...found)
+        redacted =
+          mode !== 'redact'
+            ? null
+            : vault
+              ? redact(tok.key, found, {
+                  token: (f) => {
+                    const t = `⟨cx:${vault.size + 1}⟩`
+                    vault.set(t, f.match)
+                    return t
+                  },
+                })
+              : redact(tok.key, found)
+      }
+      verdict.set(tok.key, redacted)
+    }
+    if (redacted !== null) edits.set(tok.start, redacted)
+  }
+  return { findings, edits }
 }
 
 /**
@@ -320,7 +369,7 @@ export const DEFAULT_MAX_BODY = 64 * 1024 * 1024
 const MAX_EVENTS_BODY = 1024 * 1024
 
 /** Why a body could not be inspected. Null means it was scanned normally. */
-export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable'
+export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable' | 'ambiguous'
 
 /**
  * Decode a request body for scanning. Returns null when the encoding is one we
@@ -478,14 +527,25 @@ async function handle(
       if (decoded === null) {
         unscannable = 'encoding'
       } else {
+        const text = decoded.toString('utf8')
         let json: unknown
+        let index: JsonIndex | null = null
         try {
-          json = JSON.parse(decoded.toString('utf8'))
+          json = JSON.parse(text)
+          // The reader that records where each string sits must agree that this is JSON
+          // (it refuses only what is nested past 512 levels). If it does not, the body is
+          // not scanned as if it were.
+          index = indexJson(text)
         } catch {
-          unscannable = 'unparsable'
+          // not JSON
         }
-        if (!unscannable) {
-          const findings = processPayload(json, opts.mode, config, opts.custom, vault, opts.signature)
+        if (index === null) unscannable = 'unparsable'
+        else if (index.duplicateKeys) unscannable = 'ambiguous'
+        if (!unscannable && index !== null) {
+          const edits = new Map<string, string>()
+          const findings = processPayload(json, opts.mode, config, opts.custom, vault, opts.signature, edits)
+          const keys = processKeys(index, opts.mode, config, opts.custom, vault)
+          findings.push(...keys.findings)
           if (findings.length > 0) {
             stats.withFindings++
             for (const f of findings) bump(stats.byType, f.type, 1)
@@ -506,9 +566,10 @@ async function handle(
             }
             if (opts.mode === 'redact') {
               stats.redacted++
-              // The rewritten body is plain JSON: forward it decoded and drop the
-              // stale content-encoding rather than re-compressing.
-              body = Buffer.from(JSON.stringify(json))
+              // The edits are applied to the text the client sent, so numbers, spacing and
+              // key order arrive as they were. The result is plain JSON: forward it decoded
+              // and drop the stale content-encoding rather than re-compressing.
+              body = Buffer.from(patchJson(text, index, edits, keys.edits))
               dropContentEncoding = true
             }
           }

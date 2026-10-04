@@ -472,4 +472,58 @@ describe('methods, size limits and refusals', () => {
     expect(DEFAULT_MAX_BODY).toBe(64 * 1024 * 1024)
     expect(DEFAULT_MAX_SCAN_BODY).toBeLessThan(DEFAULT_MAX_BODY)
   })
+
+  // Redact used to parse the body and write it back, which is not a faithful copy.
+  it('redact changes only the secret: numbers, spacing, key order and escapes arrive as sent', async () => {
+    const t = await setup('redact')
+    const sent =
+      '{ "user_id" : 9007199254740993,\n  "price":1.10, "big":123456789012345678901234567890, "zero":-0.0e0,\n' +
+      `  "note":"keep\\/this", "messages":[{"role":"user","content":"k ${SECRET}"}] , "seed":18446744073709551615 }`
+    await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: sent })
+    const got = t.calls[0]!.body
+    expect(got).not.toContain(SECRET)
+    for (const keep of ['9007199254740993', '1.10', '123456789012345678901234567890', '-0.0e0', '18446744073709551615', 'keep\\/this', ' "user_id" : ']) {
+      expect(got, keep).toContain(keep)
+    }
+    expect(got.replace(/"k [^"]*"/, '""')).toBe(sent.replace(/"k [^"]*"/, '""'))
+  })
+
+  it('a body with nothing to redact is forwarded exactly as it came, bytes and encoding', async () => {
+    const t = await setup('redact')
+    const sent = '{"a" :  9007199254740993 ,"messages":[{"role":"user","content":"hello"}]}'
+    await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: sent })
+    expect(t.calls[0]!.body).toBe(sent)
+  })
+
+  it('a duplicate key is refused in block mode as unscannable, and counted unscanned elsewhere', async () => {
+    const dup = `{"messages":[{"role":"user","content":"k ${SECRET}"}],"messages":[]}`
+    const blocked = await setup('block')
+    const a = await blocked.get('/v1/messages', { method: 'POST', headers: JSON_H, body: dup })
+    expect(a.status).toBe(403)
+    expect(JSON.parse(a.text).error).toMatchObject({ type: 'contextia_unscannable', reason: 'ambiguous' })
+    expect(blocked.calls).toHaveLength(0)
+    const warned = await setup('warn')
+    await warned.get('/v1/messages', { method: 'POST', headers: JSON_H, body: dup })
+    expect(await warned.stats()).toMatchObject({ unscanned: 1 })
+  })
+
+  it('reads the keys: a secret used as an object key is found, blocked, and redacted', async () => {
+    const body = JSON.stringify({ messages: [{ role: 'user', content: 'hi' }], metadata: { [SECRET]: 'x', other: 1 } })
+    const blocked = await setup('block')
+    expect((await blocked.get('/v1/messages', { method: 'POST', headers: JSON_H, body })).status).toBe(403)
+    expect(blocked.calls).toHaveLength(0)
+    const red = await setup('redact')
+    await red.get('/v1/messages', { method: 'POST', headers: JSON_H, body })
+    const sent = red.calls[0]!.body
+    expect(sent).not.toContain(SECRET)
+    expect(JSON.parse(sent).metadata).toEqual({ '⟨redacted:aws_access_key_id⟩': 'x', other: 1 })
+  })
+
+  it('a body that is not valid JSON by the stricter reader is unparsable, never scanned as if it were', async () => {
+    const blocked = await setup('block')
+    const deep = '['.repeat(600) + `"${SECRET}"` + ']'.repeat(600) // valid JSON, nested past the reader's limit
+    const r = await blocked.get('/v1/messages', { method: 'POST', headers: JSON_H, body: deep })
+    expect(r.status).toBe(403)
+    expect(JSON.parse(r.text).error.reason).toBe('unparsable')
+  })
 })
