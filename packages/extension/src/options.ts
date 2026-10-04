@@ -11,6 +11,7 @@ import {
 import { markNode } from './brand.js'
 import { isLoopbackUrl, DEFAULT_STATS_URL } from './reporter.js'
 import { api } from './api.js'
+import { showLoadError } from './load-error.js'
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
   { id: 'warn', label: 'Warn', hint: 'Flag and let me decide' },
@@ -299,9 +300,14 @@ async function renderActivity(app: HTMLElement): Promise<void> {
 }
 
 async function render(): Promise<void> {
-  settings = await getSettings()
   const app = document.getElementById('app')
   if (!app) return
+  try {
+    settings = await getSettings()
+  } catch {
+    showLoadError(app, () => void render())
+    return
+  }
   app.replaceChildren()
 
   const brand = el('div', 'cx-brand')
@@ -316,7 +322,11 @@ async function render(): Promise<void> {
   renderDetectors(app)
   renderAllowlists(app)
   renderIntegration(app)
-  await renderActivity(app)
+  try {
+    await renderActivity(app)
+  } catch {
+    // the rest of the page works without the activity card
+  }
 }
 
 void render()

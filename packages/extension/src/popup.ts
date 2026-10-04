@@ -1,6 +1,7 @@
 import { getSettings, setSettings, getStats, getLog, clearAll, type Mode } from './storage.js'
 import { api } from './api.js'
 import { markNode, svgNode } from './brand.js'
+import { showLoadError } from './load-error.js'
 
 const MODE_LABELS: Record<Mode, string> = {
   warn: 'Warn: flag, let me decide',
@@ -38,7 +39,14 @@ async function render(): Promise<void> {
     wrap.append(svgNode(SPINNER))
     app.replaceChildren(wrap)
   }
-  const [settings, stats, log] = await Promise.all([getSettings(), getStats(), getLog()])
+  let loaded
+  try {
+    loaded = await Promise.all([getSettings(), getStats(), getLog()])
+  } catch {
+    if (app) showLoadError(app, () => void render())
+    return
+  }
+  const [settings, stats, log] = loaded
   if (!app) return
   app.replaceChildren()
 
