@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## v2.2.0
 
-Changes after 2.1.0, found the same way: by running each surface as a user does, in real
+Contains everything in v2.1.0 below and the changes after it. The `v2.1.0` tag and GitHub release
+exist, but 2.1.0 was never published to npm (the last npm version before this one is 2.0.3) and the
+version fields in that tag still said 2.0.4; 2.2.0 is the first npm release with those fixes. The
+changes after 2.1.0 were found the same way: by running each surface as a user does, in real
 browsers and on Windows and macOS, and by looking at the pictures. Every fix has a test that
 fails without it; the measurements are in `docs/COVERAGE.md`.
 
@@ -23,8 +26,9 @@ fails without it; the measurements are in `docs/COVERAGE.md`.
   because on Windows and macOS the client otherwise saw a reset instead of the answer.
 - `--reversible` did not restore a placeholder that a streamed reply cut across deltas
   (`⟨cx`, `:1`, `⟩`): the client received the placeholder. The text deltas are now joined
-  per field before restoring. Tested with a stand-in streaming server, not a live model. The
-  reply is still held until it is complete.
+  per field before restoring, also in a tool call's `partial_json` (restored with the extra layer
+  of escaping its text needs) and after a byte order mark. Tested with a stand-in streaming server,
+  not a live model. The reply is still held until it is complete.
 - An unreachable upstream was answered with `TypeError: fetch failed`; the reply now names the
   upstream and the cause (`ECONNREFUSED`).
 
@@ -73,6 +77,9 @@ fails without it; the measurements are in `docs/COVERAGE.md`.
 
 **Build and checks**
 
+- A `Release` workflow publishes the two npm packages (trusted publishing, no stored token), builds the
+  Chrome and Firefox zips and the source zip AMO asks for, and attaches them to the GitHub release;
+  `npm run check:versions` fails when the five version fields, or a tag, disagree. `docs/RELEASING.md`.
 - `npm run test:pack` runs on Windows (it ran the installed CLI through npm's shell shim).
 - Browser checks in CI: `test:a11y` (axe-core, keyboard), `test:states` (every screen in 18
   states at phone and desktop widths, with a fingerprint of each picture) and `test:firefox`

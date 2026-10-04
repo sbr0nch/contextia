@@ -242,6 +242,24 @@ describe('restoreStream', () => {
     expect(out.split('\n')).toEqual(['data: two\\"quoted\\nline', '', ''])
   })
 
+  it('reads a stream that starts with a byte order mark', () => {
+    const out = restoreStream('\uFEFF' + [ev({ t: '⟨cx' }), ev({ t: ':1⟩' })].join('\n\n') + '\n\n', vault)
+    expect(out.startsWith('\uFEFF')).toBe(true)
+    expect(said(out.slice(1))).toBe('AKIA-ONE')
+  })
+
+  it('restores into a tool-input fragment (partial_json) with the extra layer of escaping its text needs', () => {
+    // the fragments join into JSON text: {"k":"<value>"}; the value sits inside a JSON string there
+    const frags = ['{"k":"', '⟨cx', ':2⟩"}']
+    const out = restoreStream(frags.map((f) => `data: ${JSON.stringify({ type: 'content_block_delta', delta: { type: 'input_json_delta', partial_json: f } })}`).join('\n\n') + '\n\n', vault)
+    const joined = out
+      .split('\n')
+      .filter((l) => l.startsWith('data: '))
+      .map((l) => (JSON.parse(l.slice(6)) as { delta: { partial_json: string } }).delta.partial_json)
+      .join('')
+    expect(JSON.parse(joined)).toEqual({ k: 'two"quoted\nline' })
+  })
+
   it('finds a placeholder that starts in a later delta, or exactly at the start of one', () => {
     const cases: string[][] = [
       ['ab', 'cd', '⟨cx', ':1⟩', 'ef'],

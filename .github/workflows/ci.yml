@@ -24,6 +24,7 @@ jobs:
       # What npm would publish, installed into a project with no workspace to
       # fall back on. Five releases of the engine could not be imported at all.
       - run: npm run test:pack
+      - run: npm run check:versions
 
       # The proxy as a process on a socket, which is where a client hanging up
       # mid-request used to kill it outright.

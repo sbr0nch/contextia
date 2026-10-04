@@ -391,7 +391,10 @@ export function detokenize(text: string, vault: Map<string, string>, jsonEscaped
  * placeholder is removed from the deltas it was cut into). Events that need no change
  * are left byte for byte; the value goes back JSON-escaped, so every event stays valid.
  */
-export function restoreStream(text: string, vault: Map<string, string>): string {
+export function restoreStream(input: string, vault: Map<string, string>): string {
+  // a byte order mark before the first event is not part of any line's text
+  const bom = input.startsWith('\uFEFF') ? '\uFEFF' : ''
+  const text = bom ? input.slice(1) : input
   const lines = text.split('\n')
   type Piece = { line: number; path: string; value: string }
   const indexes = new Map<number, { payload: string; index: NonNullable<ReturnType<typeof indexJson>>; prefix: string }>()
@@ -430,6 +433,8 @@ export function restoreStream(text: string, vault: Map<string, string>): string 
       while (k > 0 && starts[k]! > pos) k--
       return k
     }
+    // the fragments of a tool call's input join into JSON text, so the value goes in escaped once more
+    const asText = pieces[0]!.path.endsWith('\u0000partial_json') ? (v: string) => JSON.stringify(v).slice(1, -1) : (v: string) => v
     const out = pieces.map(() => '')
     const keep = (from: number, to: number): void => {
       // text that stays, assigned back to the piece each character came from
@@ -445,7 +450,7 @@ export function restoreStream(text: string, vault: Map<string, string>): string 
     for (const m of found) {
       const s0 = m.index!
       keep(cursor, s0)
-      out[pieceAt(s0)] += vault.get(m[0])!
+      out[pieceAt(s0)] += asText(vault.get(m[0])!)
       cursor = s0 + m[0].length
     }
     keep(cursor, joined.length)
@@ -461,7 +466,7 @@ export function restoreStream(text: string, vault: Map<string, string>): string 
     const { payload, index, prefix } = indexes.get(i)!
     lines[i] = prefix + patchJson(payload, index, m)
   }
-  return lines.join('\n')
+  return bom + lines.join('\n')
 }
 
 export function resolveUpstream(url: string, configured?: string): string {

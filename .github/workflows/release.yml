@@ -1,0 +1,94 @@
+name: Release
+
+# Pushing a tag `vX.Y.Z` builds everything from that commit, checks that the tag and the five
+# version fields agree, runs the full suite, packs the npm packages and the extension for
+# Chrome and Firefox, publishes the two npm packages, and attaches all of it to the GitHub release.
+#
+# One-time setup (not something this file can do):
+#   * npm: on npmjs.com open each of @sbr0nch/contextia and @sbr0nch/contextia-engine, Settings,
+#     Trusted Publisher, GitHub Actions: repository sbr0nch/contextia, workflow release.yml.
+#     No token is stored. (Fallback: a repository secret NPM_TOKEN; it is used if present.)
+#   * Chrome Web Store and Firefox AMO: upload the two zips and the source zip from the release
+#     by hand (docs/RELEASING.md). They are not automated: a store upload is public.
+#
+# `workflow_dispatch` runs everything except publishing, so the packages can be inspected first.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
+      - run: npm ci
+      - name: Tag and versions agree
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then node scripts/check-versions.mjs "${GITHUB_REF_NAME}"; else node scripts/check-versions.mjs; fi
+      - run: npm run verify
+      - run: npm run test:docs
+      - run: npm run test:pack
+      - run: npm run test:proxy
+      - name: Pack
+        run: |
+          mkdir -p out
+          npm pack --workspace @sbr0nch/contextia-engine --pack-destination out
+          npm pack --workspace @sbr0nch/contextia --pack-destination out
+          npm run package --workspace @sbr0nch/contextia-extension
+          npm run package:firefox --workspace @sbr0nch/contextia-extension
+          V=$(node -p "require('./packages/cli/package.json').version")
+          cp packages/extension/contextia.zip "out/contextia-chrome-$V.zip"
+          cp packages/extension/contextia-firefox.zip "out/contextia-firefox-$V.zip"
+          git archive --format=zip --output "out/contextia-source-$V.zip" HEAD
+          node scripts/release-notes.mjs "$V" > out/NOTES.md || echo "No CHANGELOG section for $V" > out/NOTES.md
+          (cd out && sha256sum * > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: out
+
+  publish:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: out
+      - name: Publish to npm (trusted publishing; NPM_TOKEN if one is set)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          V=$(node -p "require('./packages/cli/package.json').version")
+          for pkg in engine:@sbr0nch/contextia-engine cli:@sbr0nch/contextia; do
+            name="${pkg#*:}"; tgz=$(ls out/*"$(echo "$name" | sed 's#@##; s#/#-#')"-"$V".tgz)
+            if npm view "$name@$V" version >/dev/null 2>&1; then echo "$name@$V is already on npm, skipping"; continue; fi
+            npm publish "$tgz" --access public --provenance
+          done
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" out/*.tgz out/*.zip out/SHA256SUMS --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" out/*.tgz out/*.zip out/SHA256SUMS --title "Contextia $GITHUB_REF_NAME" --notes-file out/NOTES.md
+          fi

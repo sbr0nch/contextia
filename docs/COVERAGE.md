@@ -181,10 +181,10 @@ reversibile spezzato (D30, con un upstream finto), il secondo editor (D24).
 - **`--reversible` tiene la risposta fino alla fine** e poi la restaura: l'agente la riceve
   tutta insieme, non a pezzi. Il caso del segnaposto spezzato e' provato con un server
   finto in tre formati di flusso, **non** con un modello vero.
-- **Flusso di risposta in `--reversible`**: un campo `data:` su piu' righe e un BOM prima del primo
-  evento non uniscono i pezzi (il segnaposto resta tale: non e' una fuga); i valori con virgolette
-  dentro un `input_json_delta` sono ripristinati con un solo livello di escape; `pieceAt` e'
-  lineare per segnaposto (lento solo con migliaia di segnaposto in un flusso lungo).
+- **Flusso di risposta in `--reversible`**: un campo `data:` su piu' righe non unisce i pezzi (il
+  segnaposto resta tale: non e' una fuga); `pieceAt` e' lineare per segnaposto (lento solo con
+  migliaia di segnaposto in un flusso lungo). Chiusi in questo lotto: il BOM e l'escape in
+  `partial_json`.
 - **Hook**: se `block()` stesso lancia (stdout chiuso) dentro il `.catch`, l'uscita e' 1, non
   bloccante. Caso limite non corretto.
 - **Costo di molte stringhe piccole**: 100.000 stringhe da 2 caratteri (500 KB) bloccano
@@ -227,8 +227,8 @@ e' una risposta valida.
 
 | Figura | Giudizio | La prova | Cosa manca per alzarlo |
 |---|---|---|---|
-| **CEO / owner** | giallo | la 2.1.0 e' pubblicata su GitHub e dice cosa e' stato corretto; il proxy non perde piu' il segreto in nessuna delle 13 forme misurate. Ma il tag `v2.1.0` punta a un commit in cui ogni `package.json` dice ancora 2.0.4, e su npm c'e' la 2.0.3 | decidere il numero del prossimo rilascio e pubblicare npm, Chrome Web Store e AMO; non pubblicare i numeri sul sito prima |
-| **CTO / architetto** | giallo | zero dipendenze a runtime; 1 solo autore; `proxy.ts` e' il punto singolo di guasto per chi lo usa; `--reversible` trattiene la risposta fino alla fine; il mutation testing ora gira ogni settimana in una copia con TypeScript 5 (`scripts/mutation.mjs`); vitest 5 chiude l'audit ma chiede Node >= 22.12, mentre il prodotto dichiara Node >= 20 | scegliere se alzare il minimo a Node 22 (Node 20 e' fuori supporto da aprile 2026): sblocca vitest 5 e la PR dependabot; un secondo manutentore |
+| **CEO / owner** | giallo | la 2.1.0 e' sul GitHub con le note, ma non e' mai stata pubblicata su npm (l'ultima e' la 2.0.3) e il tag porta ancora 2.0.4 nei file. Deciso: il prossimo rilascio e' la **2.2.0**, che contiene tutto; `check:versions` impedisce che si ripeta; il workflow `Release` pubblica da un tag | tu: impostare il Trusted Publisher su npm, spingere il tag, caricare i due zip negli store (`docs/RELEASING.md`); i numeri sul sito dopo |
+| **CTO / architetto** | giallo | zero dipendenze a runtime; 1 solo autore; `proxy.ts` e' il punto singolo di guasto per chi lo usa; `--reversible` trattiene la risposta fino alla fine; mutation testing settimanale in CI. Node 20 e' fuori supporto dal 30 aprile 2026, ma il codice funziona e si prova ancora su 20: il minimo dichiarato resta Node >= 20 (alzarlo e' un cambio di rottura per un vantaggio solo di sviluppo: vitest 5, che chiude un audit solo dev, chiede Node >= 22.12) | un secondo manutentore; alzare il minimo a Node 22 nella prossima maggiore |
 | **CISO / sicurezza** | giallo | superficie locale chiusa (D11, D12); guardiano che fallisce chiuso e consegna il blocco anche su pipe asincrona (D8, D23); il proxy legge ogni stringa, le chiavi, e scansiona ogni occorrenza di una chiave doppia (D2, D18, D31); tetti di memoria (D19). Aperti: sezione 5 (blocchi `thinking` non letti, 2,1 s con 100.000 stringhe piccole, match oltre 250.000 caratteri). SECURITY.md ha un canale privato; nessun advisory pubblicato per D2 (non verificato) | decisione sulle voci di sezione 5; un advisory per D2 |
 | **Prodotto / UX** | giallo | accessibilita' misurata con axe e tastiera (19 controlli), 18 schermate in stati diversi, e viste in un Firefox vero, dove sono emersi due difetti visivi che Chromium non mostrava (D28). **Non provato**: una persona vera al primo uso, i siti veri con il loro CSS | prova con una persona; l'indicatore sopra le pagine vere |
 | **QA** | verde con riserva | 3.981 test + 119 casi di processo, nessuno saltato; ogni legge nuova vista rossa (anche i controlli di Firefox, sabotando il codice); browser: Chromium 141, Chrome for Testing 154 e Firefox 157 in locale, Chromium e Firefox del runner in CI; sistemi: Linux, Windows, macOS in CI; punteggio di mutazione: motore, proxy, core, lettore JSON ed estensione (vedi sezione 4). Riserva: `cli.ts`, `content.ts`, `ui.ts`, `options.ts`, `popup.ts` non muovono con Stryker | nulla di misurato che manchi, a parte la riserva |
@@ -236,7 +236,7 @@ e' una risposta valida.
 | **Supporto / utenti** | giallo | di cosa si lamenteranno per primo: l'hook che blocca quando non legge stdin; Block che rifiuta un corpo oltre 32 MB (prima 5 MB); `--reversible` che consegna la risposta tutta insieme; il CLI che esce 2 su un comando sbagliato | messaggi con la via d'uscita per i primi due |
 | **Sales / marketing** | giallo | il README ora dice solo cio' che e' stato misurato (83 rilevatori, agenti non eseguiti, streaming con server finto). I numeri dell'oracolo sono su un corpus costruito da me; il sito non e' stato toccato | provare Cursor e Windsurf; un corpus esterno; pubblicare solo prima/dopo che reggono |
 | **Legale / privacy** | verde | MIT; nessuna dipendenza runtime; `PRIVACY.md` coerente con i test di zero-rete e di log senza segreti; il test su Firefox forza connessioni dirette e mappa `claude.ai` su un server locale, nessun sito vero e' stato contattato | nulla di misurato che manchi |
-| **Maintainer open source** | giallo | CI verde sui tre sistemi; CHANGELOG diviso in "v2.1.0" e "Unreleased"; la PR dependabot su vitest 5 resta rossa per il vincolo di Node; bus factor 1; il rilascio e' manuale (il tag e' stato creato senza aumentare le versioni) | un controllo che confronti tag e `package.json`; una persona in piu' |
+| **Maintainer open source** | giallo | CI verde sui tre sistemi; CHANGELOG con v2.2.0; `check:versions` in CI e nel rilascio; la PR dependabot su vitest 5 resta rossa per il vincolo di Node (decisione sopra); bus factor 1 | una persona in piu' |
 | **Nuovo contributore** | verde | clone pulito -> `verify` verde in 19 s; i controlli di browser chiedono Playwright (dom, a11y, schermate), Firefox e openssl (Firefox), `npm ci` (mutation); `test:firefox` dice "NON PROVATO" invece di fallire se manca Firefox | nulla di misurato che manchi |
 | **Chi lo usa come dipendenza** | giallo | API del motore invariata; cambiano comportamenti: exit 2 su comando sbagliato, anteprime piu' corte, il proxy blocca di piu' e inoltra fino a 32 MB, `env_secret` trova piu' casi, pannello dell'estensione da 320 px | un numero di versione che lo dica; la nota "Behaviour that changes" nel CHANGELOG (scritta) |
 
@@ -258,37 +258,41 @@ e' una risposta valida.
 - **CTO contro Ops.** Le finestre raddoppiano il costo sui file grandi; Ops preferisce
   completezza a velocita'. Ho scelto completezza.
 - **Release contro codice (nuova).** Il tag `v2.1.0` e le note sono pubblicati, ma il codice
-  sotto il tag si presenta come 2.0.4. Non ho cambiato i numeri: e' una tua decisione.
+  sotto il tag si presenta come 2.0.4 e npm non l'ha mai avuta. Scelto: la prossima e' la 2.2.0,
+  che la sostituisce; la 2.1.0 resta sul GitHub come storia.
 
 ## Raccomandazione
 
-Ordine:
+Decisioni prese (con le ragioni, dopo averle cercate):
 
-1. **Rileggere questa PR** nelle parti a rischio: `proxy.ts` (`restoreStream`, `readBody`),
-   `json.ts`, `env-secret.ts`, `content.ts`/`composer.ts`/`ui.ts`. Un revisore indipendente in
-   sola lettura le ha gia' guardate: ha trovato 4 difetti veri, tutti corretti con la loro
-   legge (D31 a D34), e 3 limiti bassi, dichiarati in sezione 5.
-2. **Fondere** quando la CI e' verde, **poi scegliere il numero** (consiglio 2.1.1 se resta
-   tutto un seguito della 2.1.0, 2.2.0 se conta il cambio di tetto e di `env_secret`) e
-   aggiornare insieme le sei posizioni: i tre `package.json`, `plugin.json`, `marketplace.json`,
-   e `package-lock.json`.
-3. **Pubblicare** npm, Chrome Web Store (serve ancora la 2.0.1 secondo il messaggio della release
-   2.0.4) e AMO insieme: l'estensione ha correzioni che chi la usa vede (accessibilita', secondo
-   editor, stato d'errore).
-4. **Solo dopo**, il sito: prima/dopo con `scripts/benchmarks.mjs` e `scripts/oracle.mjs`, con
-   le loro riserve scritte.
+- **Versione 2.2.0**: la 2.1.0 non e' mai arrivata su npm e il suo tag ha i file a 2.0.4; questo lotto
+  aggiunge cambi di comportamento (tetto di scansione da 5 a 32 MB, `env_secret` piu' ampio).
+- **Minimo Node resta >= 20**: Node 20 e' fuori supporto, ma alzare il minimo rompe chi lo usa per
+  un vantaggio solo di sviluppo. vitest 5 (che chiede Node >= 22.12) non si prende; l'avviso dell'audit
+  e' solo dev e il grafo di produzione ne ha 0. Il workflow di rilascio gira su Node 24, come
+  chiede il trusted publishing di npm (Node >= 22.14, npm >= 11.5.1).
+- **Tetto di scansione 32 MB**, **hook che fallisce chiuso**, **negozi non automatizzati** (un
+  caricamento e' pubblico e non si puo' provare da qui): invariati.
 
-Cosa mi farebbe cambiare idea: una prova con un agente vero e un modello vero in streaming che
-mostri un difetto in `--reversible` o nel proxy (priorita' sul punto 3); un fallimento su
-Windows di `contextia run` con Ctrl+C; il revisore che trova una regressione (priorita' sul punto 2).
+Ordine da qui:
+
+1. Fondere questa PR con la CI verde.
+2. **Tu**, una volta: su npmjs.com, per `@sbr0nch/contextia` e `@sbr0nch/contextia-engine`,
+   Settings, Trusted Publisher, GitHub Actions, repository `sbr0nch/contextia`, workflow `release.yml`.
+3. `git tag v2.2.0 && git push origin v2.2.0`: il workflow `Release` controlla tag e versioni, prova
+   tutto, pubblica su npm e allega pacchetti, zip e `SHA256SUMS` al rilascio.
+4. **Tu**: caricare `contextia-chrome-2.2.0.zip` sul Chrome Web Store e `contextia-firefox-2.2.0.zip`
+   (con `contextia-source-2.2.0.zip` e `packages/extension/BUILDING.md`) su AMO.
+5. Solo dopo, il sito, con `scripts/benchmarks.mjs` e `scripts/oracle.mjs` e le loro riserve.
+
+Cosa mi farebbe cambiare idea: un difetto in `--reversible` o nel proxy mostrato da un agente vero con
+un modello vero in streaming; un fallimento di `contextia run` con Ctrl+C su Windows.
 
 ## Cosa serve a te (separato da cio' che faccio io)
 
-- **Decisioni**: il numero di versione; se alzare il minimo a Node 22; se 32 MB di tetto di
-  scansione va bene; se tenere l'hook fail-closed; se e quando pubblicare sul sito.
-- **Macchine e account**: una macchina **Windows** e una **macOS** reali (Ctrl+C in `run`,
-  SIGTERM, memoria); **Edge e Safari**; account veri su **ChatGPT, Claude, Gemini** per vedere
-  l'indicatore sul DOM e sul CSS veri; un'installazione di **Claude Code**, **Cursor**,
-  **Windsurf** e **aider** con una chiave API per provare il proxy con un agente vero e un
-  modello in streaming; i permessi di pubblicazione su **npm**, **Chrome Web Store** e **AMO**;
-  un secondo manutentore.
+- I tre passi sopra (Trusted Publisher, tag, caricamento negli store): sono gli unici che richiedono
+  i tuoi account.
+- **Per chiudere cio' che non e' provato**: una macchina **Windows** e una **macOS** reali (Ctrl+C in
+  `run`, SIGTERM, memoria); **Edge e Safari**; account veri su **ChatGPT, Claude, Gemini** per vedere
+  l'indicatore sul DOM e sul CSS veri; **Claude Code**, **Cursor**, **Windsurf** e **aider** con una
+  chiave API per provare il proxy con un agente vero e un modello in streaming; un secondo manutentore.
