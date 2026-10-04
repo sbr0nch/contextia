@@ -15,7 +15,7 @@
 // back on, and imports them by name.
 
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync, readdirSync, existsSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, readdirSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -29,8 +29,20 @@ const npm = (args, cwd) =>
 
 const box = mkdtempSync(join(tmpdir(), 'contextia-pack-'))
 try {
+  // The plugin ships its own copy of the engine, vendor/engine.js, committed to the
+  // repository. A fix to a detector that is not followed by a rebuild leaves
+  // plugin users on the old engine while the packages carry the new one, so the
+  // committed copy must be what a build produces now.
+  const vendor = join(root, 'plugins/contextia/vendor/engine.js')
+  const committedBundle = readFileSync(vendor)
+
   // Build, then pack exactly what publish would send.
   npm(['run', 'build'], root)
+  record(
+    Buffer.compare(committedBundle, readFileSync(vendor)) === 0,
+    'the plugin bundle (vendor/engine.js) is the current engine',
+    'stale: run `npm run build` and commit plugins/contextia/vendor/engine.js',
+  )
   for (const pkg of ['packages/engine', 'packages/cli']) {
     npm(['pack', '--pack-destination', box], join(root, pkg))
   }

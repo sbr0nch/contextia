@@ -112,6 +112,25 @@ try {
     assert(r.stdout.includes('const key'), 'the surrounding text was lost')
   })
 
+  // --json is what a CI step parses. It must stay valid for a clean tree, and for
+  // file names a shell happily creates.
+  check('scan --json stays valid JSON: empty on a clean tree, and with hostile file names', () => {
+    const clean = run(['scan', '--json', 'src/clean.ts'], { cwd: box })
+    assert(clean.code === 0 && JSON.parse(clean.stdout).length === 0, 'a clean scan did not print []')
+    const odd = mkdtempSync(join(tmpdir(), 'contextia-odd-'))
+    try {
+      const names = ['a "quoted" name.txt', 'new\nline.txt', 'tab\there.txt', 'caf\u00e9 \ud83d\ude00.txt', 'back\\slash.txt']
+      for (const n of names) writeFileSync(join(odd, n), 'k = "AKIAIOSFODNN7EXAMPLE"\n')
+      const r = run(['scan', '--json', '.'], { cwd: odd })
+      const rows = JSON.parse(r.stdout)
+      assert(r.code === 1 && rows.length === names.length, `expected ${names.length} rows, got ${rows.length}`)
+      for (const n of names) assert(rows.some((x) => x.file === './' + n || x.file === n), `file name lost: ${JSON.stringify(n)}`)
+      assert(rows.every((x) => x.preview && !x.preview.includes('AKIAIOSFODNN7EXAMPLE')), 'a preview carries the whole key')
+    } finally {
+      rmSync(odd, { recursive: true, force: true })
+    }
+  })
+
   check('list names the detectors', () => {
     const r = run(['list'])
     assert(r.code === 0 && /aws_access_key_id/.test(r.stdout), 'roster missing')
