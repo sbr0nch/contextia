@@ -49,7 +49,7 @@ export interface ProxyStats {
 
 const UNSCANNABLE_DETAIL: Record<UnscannableReason, string> = {
   oversize: 'larger than the 5 MB scan cap',
-  encoding: 'unsupported content-encoding',
+  encoding: 'unsupported content-encoding, or larger than the 5 MB scan cap once decompressed',
   unparsable: 'not JSON we understand',
   truncated: 'longer than the engine scan cap, so the tail was not read',
 }
@@ -111,6 +111,26 @@ export function foldEvents(stats: ProxyStats, events: BrowserEvent[]): void {
     else if (e.action === 'block') stats.blocked += e.count
     else if (e.action === 'leaked') stats.leaked += e.count
   }
+}
+
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
+const EXTENSION_ORIGIN = /^(chrome|moz|safari-web)-extension:\/\//
+
+/**
+ * Whether a request for the proxy's own pages may be answered. The pages sit on a
+ * loopback port that any web page the user has open can reach. A rebound domain
+ * arrives with its own name in Host, so Host must be loopback; a page's POST
+ * carries its site in Origin, so only the extension or a client with no Origin
+ * may post. An operator who bound another interface on purpose is not held to Host.
+ */
+function localRequestAllowed(req: IncomingMessage, opts: ProxyOptions, post: boolean): boolean {
+  const bound = opts.host ?? DEFAULT_HOST
+  if (LOOPBACK_HOSTS.has(bound) || bound === 'localhost') {
+    const host = (req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '')
+    if (!LOOPBACK_HOSTS.has(host)) return false
+  }
+  const origin = req.headers.origin
+  return !(post && origin !== undefined && !EXTENSION_ORIGIN.test(origin))
 }
 
 function isLoopbackAddr(addr: string | undefined): boolean {
@@ -291,9 +311,11 @@ export function decodeBody(body: Buffer, encoding?: string): Buffer | null {
   const enc = (encoding ?? '').trim().toLowerCase()
   try {
     if (enc === '' || enc === 'identity') return body
-    if (enc === 'gzip' || enc === 'x-gzip') return gunzipSync(body)
-    if (enc === 'deflate') return inflateSync(body)
-    if (enc === 'br') return brotliDecompressSync(body)
+    // Capped: a 400 KB gzip expands to 400 MB, and the proxy used to allocate all of it.
+    const cap = { maxOutputLength: MAX_SCAN_BODY }
+    if (enc === 'gzip' || enc === 'x-gzip') return gunzipSync(body, cap)
+    if (enc === 'deflate') return inflateSync(body, cap)
+    if (enc === 'br') return brotliDecompressSync(body, cap)
   } catch {
     return null
   }
@@ -346,6 +368,12 @@ async function handle(
   stats: ProxyStats,
 ): Promise<void> {
   const path = req.url ?? '/'
+
+  if (path.startsWith('/__contextia') && !localRequestAllowed(req, opts, req.method === 'POST')) {
+    res.writeHead(403, { 'content-type': 'application/json' })
+    res.end('{"error":"not for this origin or host"}')
+    return
+  }
 
   // The proxy's own local dashboard / stats, never forwarded upstream.
   if (path === '/__contextia/stats') {
