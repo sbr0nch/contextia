@@ -284,6 +284,7 @@ var privateKey = {
 // packages/engine/src/detectors/env-secret.ts
 var RE9 = /(?:^|\n)[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]*[ \t]*=[ \t]*['"]?([^\s'"#]{8,})['"]?/gi;
 var INLINE = /(?<![A-Za-z0-9_])[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]*=['"]?([^\s'"#]{8,})['"]?/g;
+var CODE_CHARS = /[(){}\[\],;]/;
 var PLACEHOLDER = /^\$[{(A-Za-z_]|^<|^your_|^changeme$|^x{3,}$|^\.{3,}$/i;
 var CODE_TAIL = /[;,)}\]]$/;
 var SECRET_SHAPE = /[0-9+/=]/;
@@ -300,6 +301,7 @@ var envSecret = {
       for (const m of text.matchAll(re)) {
         const value = re === INLINE ? m[1].replace(/[.,;:)\]}]+$/, "") : m[1];
         if (value.length < 8) continue;
+        if (re === INLINE && CODE_CHARS.test(value)) continue;
         if (PLACEHOLDER.test(value)) continue;
         if (CODE_TAIL.test(value)) continue;
         if (!SECRET_SHAPE.test(value)) continue;
@@ -341,6 +343,8 @@ var envSecret = {
       // a regular expression literal, not a value
       "run with API_KEY=$KEY123456 set",
       // a variable reference
+      "x.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED=Ku,t.cloneElement=function(e,t,n){if(null==e)throw Error(y(2))}",
+      // a minified bundle (React), found by scanning node_modules
       "see (API_KEY=a1b2c3d...) in the docs"
       // what is left once the sentence's punctuation is off is too short to be a value
     ]

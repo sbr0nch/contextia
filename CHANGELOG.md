@@ -34,7 +34,8 @@ The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reprod
   detector's fixtures in 15 real contexts: 32 of 3,015 failed, all this one). An UPPER_CASE
   assignment is now read in the middle of a line too; a lower-case key still needs a line start
   (case-insensitive it flagged 144 minified-code fragments in 3,311 files of `node_modules`; as
-  built, none). A shell variable (`$NAME`) and a regular expression literal are not values.
+  built, none). A shell variable (`$NAME`), a regular expression literal and a mid-line value holding
+  brackets, braces, commas or semicolons (a minified bundle) are not values.
 - `email`, `internal_hostname` and `db_connection_string` were quadratic (6.4 s, 6.3 s and
   3.7 s on 80 KB), and `private_key` took 11.7 s on 1 MB of repeated headers. On a
   paste, a prompt or a request that froze the browser tab, the proxy or the hook. All
