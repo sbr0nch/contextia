@@ -240,10 +240,19 @@ export function processPayload(
   return findings
 }
 
-/** Restore original values in the LLM's response (reversible mode). */
-export function detokenize(text: string, vault: Map<string, string>): string {
+/**
+ * Restore original values in the LLM's response (reversible mode).
+ *
+ * `jsonEscaped` is for a reply that is JSON, or SSE lines of JSON: the token sits
+ * inside a JSON string, so a value with a newline, a quote or a backslash has to
+ * go back escaped or the reply stops parsing.
+ */
+export function detokenize(text: string, vault: Map<string, string>, jsonEscaped = false): string {
   let out = text
-  for (const [token, original] of vault) out = out.split(token).join(original)
+  for (const [token, original] of vault) {
+    const value = jsonEscaped ? JSON.stringify(original).slice(1, -1) : original
+    out = out.split(token).join(value)
+  }
   return out
 }
 
@@ -491,7 +500,8 @@ async function handle(
   // Reversible mode: buffer the response and restore the originals so the LLM's
   // answer is usable. (Trades streaming for round-trip restoration.)
   if (vault && vault.size > 0) {
-    const restored = detokenize(await upstreamRes.text(), vault)
+    const jsonish = /json|event-stream/i.test(upstreamRes.headers.get('content-type') ?? '')
+    const restored = detokenize(await upstreamRes.text(), vault, jsonish)
     res.writeHead(upstreamRes.status, outHeaders)
     res.end(restored)
     return
