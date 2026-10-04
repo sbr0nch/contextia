@@ -15,7 +15,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "prepublishOnly": "npm run build",
-    "test:proxy": "node build.mjs && node proxy-resilience.mjs"
+    "test:proxy": "node build.mjs && node proxy-resilience.mjs && node process-faults.mjs"
   },
   "devDependencies": {
     "@sbr0nch/contextia-engine": "*",

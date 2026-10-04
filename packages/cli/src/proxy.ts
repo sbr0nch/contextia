@@ -524,7 +524,10 @@ async function handle(
     upstreamRes = await fetch(upstream + path, init)
   } catch (e) {
     res.writeHead(502, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ error: { type: 'contextia_upstream_error', message: String(e) } }))
+    // fetch reports every network failure as "fetch failed"; the reason is on the cause
+    const cause = (e as { cause?: { code?: string; message?: string } }).cause
+    const why = cause?.code ?? cause?.message ?? String(e)
+    res.end(JSON.stringify({ error: { type: 'contextia_upstream_error', message: `Contextia could not reach the upstream ${upstream}: ${why}` } }))
     return
   }
 

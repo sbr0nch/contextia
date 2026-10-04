@@ -172,8 +172,9 @@ function validPort(raw: string | undefined): number {
 function cmdProxy(): void {
   const mode = flagValue('--mode') ?? 'redact'
   if (!validMode(mode)) return
-  startProxy({
-    port: validPort(flagValue('--port')),
+  const port = validPort(flagValue('--port'))
+  const server = startProxy({
+    port,
     mode,
     host: flagValue('--host'),
     upstream: flagValue('--upstream'),
@@ -182,6 +183,17 @@ function cmdProxy(): void {
     reversible: flags.has('--reversible'),
     signature: !flags.has('--no-signature'),
     onFinding: findingLogger(mode),
+  })
+  // listen() reports a taken port as an 'error' event; unhandled, it was a stack trace.
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    const why =
+      err.code === 'EADDRINUSE'
+        ? `port ${port} is already in use. Pick another with --port, or stop what is using it.`
+        : err.code === 'EACCES'
+          ? `not allowed to listen on port ${port}. Use a port above 1023, or run with the right permissions.`
+          : `cannot listen on port ${port}: ${err.message}`
+    process.stderr.write(`contextia: ${why}\n`)
+    process.exit(1)
   })
 }
 
