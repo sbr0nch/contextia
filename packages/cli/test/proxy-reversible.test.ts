@@ -118,3 +118,87 @@ describe('--reversible never restores a value from another request', () => {
     expect(text).toBe(`${SECRET} and a guess ⟨cx:7⟩`)
   })
 })
+
+// A model streams its answer in small deltas, and a placeholder is a few tokens long:
+// it arrives cut across events (`⟨cx`, `:1`, `⟩`). The reply was restored by searching
+// the raw body, so a cut placeholder was never found and the client was handed the
+// placeholder instead of its value.
+describe('--reversible restores a placeholder cut across streamed deltas', () => {
+  const SECRET = 'AKIAIOSFODNN7EXAMPLE'
+  const ev = (o: unknown) => `data: ${JSON.stringify(o)}\n\n`
+  // each shape cuts the placeholder at every position, in turn
+  const SHAPES: Record<string, { frame: (piece: string) => string; read: (d: Record<string, any>) => string }> = {
+    anthropic: {
+      frame: (t) => `event: content_block_delta\n${ev({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: t } })}`,
+      read: (d) => d.delta?.text ?? '',
+    },
+    'openai chat': {
+      frame: (t) => ev({ choices: [{ index: 0, delta: { content: t } }] }),
+      read: (d) => d.choices?.[0]?.delta?.content ?? '',
+    },
+    'openai responses': {
+      frame: (t) => ev({ type: 'response.output_text.delta', delta: t }),
+      read: (d) => (typeof d.delta === 'string' ? d.delta : ''),
+    },
+  }
+
+  function streamer(frame: (p: string) => string, cuts: number[]): Server {
+    return createServer(async (req, res) => {
+      const ch: Buffer[] = []
+      for await (const c of req) ch.push(c as Buffer)
+      const text = (JSON.parse(Buffer.concat(ch).toString('utf8')) as { messages: Array<{ content: string }> }).messages[0]!.content
+      const at = [0, ...cuts, text.length]
+      res.writeHead(200, { 'content-type': 'text/event-stream' })
+      for (let i = 0; i < at.length - 1; i++) res.write(frame(text.slice(at[i]!, at[i + 1]!)))
+      res.end('data: [DONE]\n\n')
+    })
+  }
+
+  async function reply(frame: (p: string) => string, cuts: number[], content: string): Promise<string> {
+    const upPort = await listen(streamer(frame, cuts))
+    const proxy = createProxyServer({ port: 0, mode: 'redact', reversible: true, signature: false, upstream: `http://localhost:${upPort}` })
+    const port = await listen(proxy)
+    const res = await fetch(`http://localhost:${port}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content }] }),
+    })
+    return res.text()
+  }
+
+  const said = (body: string, read: (d: Record<string, any>) => string): string =>
+    body
+      .split('\n')
+      .filter((l) => l.startsWith('data: ') && l !== 'data: [DONE]')
+      .map((l) => read(JSON.parse(l.slice(6)) as Record<string, any>))
+      .join('')
+
+  for (const [name, shape] of Object.entries(SHAPES)) {
+    it(`${name}: the value comes back wherever the placeholder is cut`, async () => {
+      const content = `key ${SECRET} end`
+      // the request carries the secret; the upstream echoes the redacted text, so the
+      // placeholder starts at 4 and is 6 characters long: cut it at each inner position
+      for (const cut of [5, 6, 7, 8, 9]) {
+        const body = await reply(shape.frame, [cut], content)
+        expect(said(body, shape.read), `cut at ${cut}`).toBe(content)
+      }
+      const body = await reply(shape.frame, [5, 6, 7, 8, 9, 10], content)
+      expect(said(body, shape.read), 'cut at every position').toBe(content)
+    })
+  }
+
+  it('leaves a cut placeholder this request did not issue alone', async () => {
+    // the request has a secret of its own (so restoring runs), and the reply also carries
+    // a placeholder it never issued, cut in two
+    const content = `${SECRET} then ⟨cx:7⟩`
+    const body = await reply(SHAPES['anthropic']!.frame, [14, 16], content)
+    expect(said(body, SHAPES['anthropic']!.read)).toBe(content)
+  })
+
+  it('keeps every event valid JSON when the value has quotes and a newline', async () => {
+    const content = `k ${PEM} z`
+    const body = await reply(SHAPES['openai chat']!.frame, [3, 4, 5, 6], content)
+    for (const l of body.split('\n').filter((x) => x.startsWith('data: ') && x !== 'data: [DONE]')) JSON.parse(l.slice(6))
+    expect(said(body, SHAPES['openai chat']!.read)).toBe(content)
+  })
+})

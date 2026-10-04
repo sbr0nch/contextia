@@ -339,6 +339,89 @@ export function detokenize(text: string, vault: Map<string, string>, jsonEscaped
   return out
 }
 
+/**
+ * Restore originals in a streamed (SSE) reply.
+ *
+ * A model streams its answer in small deltas and a placeholder is a few tokens long, so
+ * it can arrive cut across events. Each text delta is a string at the same place in its
+ * event, so the strings at one path are joined in order, the placeholders found in the
+ * joined text, and the value written where the placeholder began (the rest of the
+ * placeholder is removed from the deltas it was cut into). Events that need no change
+ * are left byte for byte; the value goes back JSON-escaped, so every event stays valid.
+ */
+export function restoreStream(text: string, vault: Map<string, string>): string {
+  const lines = text.split('\n')
+  type Piece = { line: number; path: string; value: string }
+  const indexes = new Map<number, { payload: string; index: NonNullable<ReturnType<typeof indexJson>>; prefix: string }>()
+  const groups = new Map<string, Piece[]>()
+  lines.forEach((l, i) => {
+    const prefix = l.startsWith('data: ') ? 'data: ' : l.startsWith('data:') ? 'data:' : null
+    const payload = prefix === null ? '' : l.slice(prefix.length)
+    const index = prefix === null ? null : indexJson(payload)
+    if (!index || prefix === null) {
+      lines[i] = detokenize(l, vault, true) // not a JSON event: a whole placeholder in it is still restored
+      return
+    }
+    indexes.set(i, { payload, index, prefix })
+    for (const [path, tok] of index.strings) {
+      const raw = payload.slice(tok.start, tok.end)
+      const value = JSON.parse(raw) as string
+      const list = groups.get(path)
+      if (list) list.push({ line: i, path, value })
+      else groups.set(path, [{ line: i, path, value }])
+    }
+  })
+
+  const edits = new Map<number, Map<string, string>>()
+  for (const pieces of groups.values()) {
+    const joined = pieces.map((p) => p.value).join('')
+    const found = [...joined.matchAll(/⟨cx:\d+⟩/g)].filter((m) => vault.has(m[0]))
+    if (found.length === 0) continue
+    const starts: number[] = []
+    let at = 0
+    for (const p of pieces) {
+      starts.push(at)
+      at += p.value.length
+    }
+    const pieceAt = (pos: number): number => {
+      let k = pieces.length - 1
+      while (k > 0 && starts[k]! > pos) k--
+      return k
+    }
+    const out = pieces.map(() => '')
+    const keep = (from: number, to: number): void => {
+      // text that stays, assigned back to the piece each character came from
+      let pos = from
+      while (pos < to) {
+        const k = pieceAt(pos)
+        const end = Math.min(to, starts[k]! + pieces[k]!.value.length)
+        out[k] += joined.slice(pos, end)
+        pos = end
+      }
+    }
+    let cursor = 0
+    for (const m of found) {
+      const s0 = m.index!
+      keep(cursor, s0)
+      out[pieceAt(s0)] += vault.get(m[0])!
+      cursor = s0 + m[0].length
+    }
+    keep(cursor, joined.length)
+    pieces.forEach((p, k) => {
+      if (out[k] === p.value) return
+      let m = edits.get(p.line)
+      if (!m) edits.set(p.line, (m = new Map()))
+      m.set(p.path, out[k]!)
+    })
+  }
+
+  for (const [i, m] of edits) {
+    const { payload, index, prefix } = indexes.get(i)!
+    lines[i] = prefix + patchJson(payload, index, m)
+  }
+  return lines.join('\n')
+}
+
 export function resolveUpstream(url: string, configured?: string): string {
   if (configured) return configured.replace(/\/$/, '')
   if (url.includes('/chat/completions') || url.includes('/responses')) return 'https://api.openai.com'
@@ -650,8 +733,9 @@ async function handle(
   // Reversible mode: buffer the response and restore the originals so the LLM's
   // answer is usable. (Trades streaming for round-trip restoration.)
   if (vault && vault.size > 0) {
-    const jsonish = /json|event-stream/i.test(upstreamRes.headers.get('content-type') ?? '')
-    const restored = detokenize(await upstreamRes.text(), vault, jsonish)
+    const type = upstreamRes.headers.get('content-type') ?? ''
+    const body = await upstreamRes.text()
+    const restored = /event-stream/i.test(type) ? restoreStream(body, vault) : detokenize(body, vault, /json/i.test(type))
     res.writeHead(upstreamRes.status, outHeaders)
     res.end(restored)
     return

@@ -19,6 +19,9 @@ The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reprod
 - `--reversible` returned an invalid reply when the secret held a newline, a quote or a
   backslash (a PEM key, a connection string): both the JSON and the SSE answer stopped
   parsing. The value now goes back JSON-escaped.
+- `--reversible` did not restore a placeholder that a streamed reply cut across deltas
+  (`⟨cx`, `:1`, `⟩`): the client received the placeholder. The text deltas are now joined
+  per field before restoring. Tested with a stand-in streaming server, not a live model.
 - The proxy's own pages answered any web page the user had open: a text/plain POST
   put 99,999 fake events into the stats, and stats and the dashboard answered a foreign
   `Host`, which is what DNS rebinding sends. Both are refused.

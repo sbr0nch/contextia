@@ -49,8 +49,10 @@ that agent puts the reply: a terminal scrollback, a log file, a file it edits.
 The vault is per-request, so a model can only ever get back a value that was in
 that same request, but on this path the secret does reach your disk again.
 Leave it off if what you want is for the value never to reappear at all.
-In a streamed reply, a token that arrives split across two chunks may not be
-restored; this has not been measured against a real model yet.
+The reply is held until it is complete, then restored, so a streamed answer
+reaches the agent all at once. A placeholder cut across streamed deltas is
+restored (tested on the Anthropic, OpenAI chat and OpenAI responses stream
+formats with a stand-in server, not with a live model).
 
 Works with any agent that lets you set its API base URL. The proxy is tested
 with clients that speak the Anthropic, OpenAI (chat and responses) and Gemini
