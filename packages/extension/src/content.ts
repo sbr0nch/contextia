@@ -1,5 +1,5 @@
 import { detectDetailed, redact, customFindings, type Config, type Finding } from '@sbr0nch/contextia-engine'
-import { findComposer, type Composer } from './composer.js'
+import { composerAt, findComposer, type Composer } from './composer.js'
 import { Hud } from './ui.js'
 import { api } from './api.js'
 import { scoreSendButton, isSendTarget } from './send-button.js'
@@ -48,7 +48,14 @@ async function init(): Promise<void> {
   if (settings.mode !== 'off') {
     hud.mount()
     document.addEventListener('input', onInput, true)
-    document.addEventListener('paste', () => setTimeout(scan, 0), true)
+    document.addEventListener(
+      'paste',
+      (e) => {
+        const from = e.composedPath?.()[0] ?? e.target
+        setTimeout(() => scan(from), 0)
+      },
+      true,
+    )
     document.addEventListener('keydown', onKeydown, true)
     document.addEventListener('click', onSendClick, true)
     document.addEventListener('submit', onSubmit, true)
@@ -63,7 +70,8 @@ async function init(): Promise<void> {
   })
 }
 
-const onInput = debounce(scan, 150)
+// The editor being typed in is the one to watch, not the first one on the page
+const onInput = debounce((e: Event) => scan(e.composedPath?.()[0] ?? e.target), 150)
 
 function effectiveConfig(): Config {
   const base = toEngineConfig(settings)
@@ -76,13 +84,13 @@ function effectiveConfig(): Config {
   }
 }
 
-function scan(): void {
+function scan(from?: EventTarget | null): void {
   if (settings.mode === 'off') {
     findings = []
     scanTruncated = false
     return
   }
-  composer = findComposer()
+  composer = composerAt(from ?? null) ?? findComposer()
   const text = composer?.getText() ?? ''
   if (!text) scanTruncated = false
   findings = text ? scanText(text) : []
@@ -171,15 +179,16 @@ function doRedact(action: LogAction): void {
 // The findings the handlers decide from come from a scan that runs 150 ms after
 // the last input. A send that lands inside that window used to be decided from
 // stale findings and went through. Rescan right now, before every decision.
-function decide(): boolean {
+function decide(e: Event): boolean {
   if (settings.mode === 'off') return false
-  scan()
+  // composedPath()[0] sees through a shadow root, where e.target is the host
+  scan(e.composedPath?.()[0] ?? e.target)
   return needsAttention({ findings, truncated: scanTruncated }, settings.mode)
 }
 
 function onKeydown(e: KeyboardEvent): void {
   if (e.key !== 'Enter' || e.shiftKey) return
-  if (!decide()) return
+  if (!decide(e)) return
   if (settings.mode === 'block') blockSubmit(e)
   else if (settings.mode === 'warn') markLeaked()
 }
@@ -188,13 +197,13 @@ function onKeydown(e: KeyboardEvent): void {
 // records that the flagged secret was sent anyway.
 function onSendClick(e: MouseEvent): void {
   if (!isSendTarget(e.target)) return
-  if (!decide()) return
+  if (!decide(e)) return
   if (settings.mode === 'block') blockSubmit(e)
   else if (settings.mode === 'warn') markLeaked()
 }
 
 function onSubmit(e: Event): void {
-  if (!decide()) return
+  if (!decide(e)) return
   if (settings.mode === 'block') blockSubmit(e)
   else if (settings.mode === 'warn') markLeaked()
 }

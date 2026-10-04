@@ -130,6 +130,58 @@ async function blockRace(ctx, sw) {
   return failed
 }
 
+// A page can hold more than one editor: the chat composer, and the box that opens when a
+// sent message is edited. The handlers decided from the first visible composer, so a send
+// from the second one was judged on the first one's (empty) text and went through.
+const TWO_EDITORS = [
+  { name: 'Enter in the edit box, which holds the secret', press: '#edit', secretIn: '#edit', expectSent: 0 },
+  { name: 'click on the edit box\'s own send button', click: '#edit-send', secretIn: '#edit', expectSent: 0 },
+  { name: 'Enter in the main composer, which holds the secret', press: '#prompt-textarea', secretIn: '#prompt-textarea', expectSent: 0 },
+  { name: 'Enter in the edit box when only the main composer holds a secret', press: '#edit', secretIn: '#prompt-textarea', expectSent: 1 },
+  { name: 'Enter in the edit box, nothing anywhere', press: '#edit', secretIn: null, expectSent: 1 },
+]
+async function twoEditors(ctx, sw) {
+  let failed = 0
+  await sw.evaluate(() => chrome.storage.local.set({ settings: { mode: 'block' } }))
+  try {
+    for (const c of TWO_EDITORS) {
+      const pg = await ctx.newPage()
+      await pg.route('**/*', (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: 'text/html; charset=utf-8',
+          body: page(`<textarea id="prompt-textarea" style="width:500px;height:50px"></textarea>
+<form id="f" onsubmit="event.preventDefault(); window.sent++"><textarea id="edit" style="width:500px;height:50px"></textarea><button id="edit-send" type="submit">Send</button></form>
+<script>window.sent=0
+for (const id of ['prompt-textarea','edit']) document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')window.sent++})</script>`),
+        }),
+      )
+      await pg.goto('https://claude.ai/', { waitUntil: 'domcontentloaded' })
+      await pg.waitForTimeout(700)
+      if (c.secretIn) {
+        await pg.focus(c.secretIn)
+        await pg.keyboard.insertText('token ' + GH)
+        await pg.waitForTimeout(400) // past the debounce: this case is about WHICH editor, not about timing
+      }
+      if (c.press) {
+        await pg.focus(c.press)
+        await pg.keyboard.press('Enter')
+      } else {
+        await pg.click(c.click)
+      }
+      await pg.waitForTimeout(300)
+      const sent = await pg.evaluate(() => window.sent)
+      const ok = sent === c.expectSent
+      if (!ok) failed++
+      console.log(`  ${ok ? 'ok  ' : 'FAIL'}  two editors: ${c.name.padEnd(62)} reached the site ${sent} time(s), expected ${c.expectSent}`)
+      await pg.close()
+    }
+  } finally {
+    await sw.evaluate(() => chrome.storage.local.remove('settings'))
+  }
+  return failed
+}
+
 async function main() {
   if (!existsSync(DIST)) {
     console.error('build the extension first: npm run build --workspace @sbr0nch/contextia-extension')
@@ -140,6 +192,7 @@ async function main() {
   let failed = 0
   try {
     failed += await blockRace(ctx, sw) // first: the service worker is awake right after launch
+    failed += await twoEditors(ctx, sw)
     for (const c of CASES) {
       const pg = await ctx.newPage()
       await pg.route('**/*', (r) =>
@@ -165,7 +218,7 @@ async function main() {
     await close()
   }
 
-  console.log(failed ? `\n${failed} case(s) failed\n` : `\nall ${CASES.length + RACE_DELAYS.length} cases passed\n`)
+  console.log(failed ? `\n${failed} case(s) failed\n` : `\nall ${CASES.length + RACE_DELAYS.length + TWO_EDITORS.length} cases passed\n`)
   process.exit(failed ? 1 : 0)
 }
 
