@@ -14,24 +14,13 @@
 // Each case asserts against the badge the extension itself renders, so what is
 // verified is what a user would see.
 
-import { chromium } from 'playwright'
-import { mkdtemp, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve, dirname } from 'node:path'
+import { resolve, dirname } from 'node:path'
+import { launchWithExtension } from './browser.mjs'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const DIST = resolve(here, 'dist')
-
-function executablePath() {
-  const pinned = chromium.executablePath()
-  if (existsSync(pinned)) return undefined
-  for (const p of ['/opt/pw-browsers/chromium', '/usr/bin/chromium', '/usr/bin/chromium-browser']) {
-    if (existsSync(p)) return p
-  }
-  return undefined
-}
 
 const AWS = 'AKIAIOSFODNN7EXAMPLE'
 const GH = 'ghp_' + 'a'.repeat(36)
@@ -108,9 +97,8 @@ async function badgeCount(pg) {
 // secret landed reached the site, and one at 200 ms did not. Each case types the
 // secret, presses Enter after the delay, and asks whether the page saw the Enter.
 const RACE_DELAYS = [0, 20, 100]
-async function blockRace(ctx) {
+async function blockRace(ctx, sw) {
   let failed = 0
-  const sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'))
   await sw.evaluate(() => chrome.storage.local.set({ settings: { mode: 'block' } }))
   try {
     for (const delay of RACE_DELAYS) {
@@ -147,17 +135,11 @@ async function main() {
     console.error('build the extension first: npm run build --workspace @sbr0nch/contextia-extension')
     process.exit(1)
   }
-  const profile = await mkdtemp(join(tmpdir(), 'contextia-dom-'))
-  const ctx = await chromium.launchPersistentContext(profile, {
-    headless: true,
-    viewport: { width: 900, height: 700 },
-    executablePath: executablePath(),
-    args: [`--disable-extensions-except=${DIST}`, `--load-extension=${DIST}`, '--no-sandbox'],
-  })
+  const { ctx, sw, close } = await launchWithExtension(DIST, { viewport: { width: 900, height: 700 } })
 
   let failed = 0
   try {
-    failed += await blockRace(ctx) // first: the service worker is awake right after launch
+    failed += await blockRace(ctx, sw) // first: the service worker is awake right after launch
     for (const c of CASES) {
       const pg = await ctx.newPage()
       await pg.route('**/*', (r) =>
@@ -180,8 +162,7 @@ async function main() {
       await pg.close()
     }
   } finally {
-    await ctx.close()
-    await rm(profile, { recursive: true, force: true })
+    await close()
   }
 
   console.log(failed ? `\n${failed} case(s) failed\n` : `\nall ${CASES.length + RACE_DELAYS.length} cases passed\n`)

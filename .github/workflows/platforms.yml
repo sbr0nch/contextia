@@ -1,0 +1,38 @@
+name: Platforms
+
+# The same checks as CI, on the operating systems and Node versions people use.
+# CI runs Linux and Node 20 only; the CLI, the proxy, `contextia run` and the plugin
+# hook also run on Windows and macOS, where paths, signals, pipes and symlinks differ,
+# and nothing measured them there.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
+
+jobs:
+  matrix:
+    name: ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [20, 22]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - run: npm run test:docs
+      - run: npm run test:pack
+      - run: npm run test:proxy
