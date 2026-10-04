@@ -155,6 +155,25 @@ try {
     }
   })
 
+  // A big customer: a log with 300,000 lines. Measured at 1.3 s; the budget is 20x that, so
+  // this catches a scan that has become quadratic and says nothing about a slow runner.
+  check('scan of a 20 MB, 300,000-line file finishes within 25 s', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'contextia-bigfile-'))
+    try {
+      const lines = []
+      for (let i = 1; i <= 300_000; i++) lines.push(`line ${i}: const value = compute(${i}) // lorem ipsum dolor sit amet`)
+      lines.push('k = "AKIAIOSFODNN7EXAMPLE"')
+      writeFileSync(join(dir, 'big.log'), lines.join('\n') + '\n')
+      const t0 = Date.now()
+      const r = run(['scan', join(dir, 'big.log')])
+      const s = (Date.now() - t0) / 1000
+      assert(r.code === 1 && /aws_access_key_id/.test(r.stdout), 'did not find the key at the end of the file')
+      assert(s < 25, `took ${s.toFixed(1)} s`)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   check('list names the detectors', () => {
     const r = run(['list'])
     assert(r.code === 0 && /aws_access_key_id/.test(r.stdout), 'roster missing')

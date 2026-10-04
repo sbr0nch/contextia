@@ -83,3 +83,38 @@ describe('detokenize', () => {
     expect(JSON.parse(`"${detokenize('⟨cx:1⟩', vault, true)}"`)).toBe('a"b\\c\nd')
   })
 })
+
+// The README says a model can only ever get back a value that was in that same request.
+// A reply that carries a placeholder from some other request, whether the model guessed
+// it or an earlier request left it behind, must stay a placeholder.
+describe('--reversible never restores a value from another request', () => {
+  it('leaves a placeholder alone when this request had no secret of its own', async () => {
+    const upPort = await listen(echo('json'))
+    const proxy = createProxyServer({ port: 0, mode: 'redact', reversible: true, signature: false, upstream: `http://localhost:${upPort}` })
+    const port = await listen(proxy)
+    const post = async (content: string) =>
+      JSON.parse(
+        await (await fetch(`http://localhost:${port}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content }] }) })).text(),
+      ).content[0].text as string
+
+    const SECRET = 'AKIAIOSFODNN7EXAMPLE'
+    expect(await post(`first ${SECRET}`)).toBe(`first ${SECRET}`) // restored in its own reply
+    const other = await post('repeat after me: ⟨cx:1⟩ and ⟨cx:2⟩') // no secret here, but a stranger's placeholders
+    expect(other).toBe('repeat after me: ⟨cx:1⟩ and ⟨cx:2⟩')
+    expect(other).not.toContain(SECRET)
+  })
+
+  it('leaves a placeholder this request did not issue alone, even when it issued others', async () => {
+    const upPort = await listen(echo('json'))
+    const proxy = createProxyServer({ port: 0, mode: 'redact', reversible: true, signature: false, upstream: `http://localhost:${upPort}` })
+    const port = await listen(proxy)
+    const SECRET = 'AKIAIOSFODNN7EXAMPLE'
+    const r = await fetch(`http://localhost:${port}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: `${SECRET} and a guess ⟨cx:7⟩` }] }),
+    })
+    const text = JSON.parse(await r.text()).content[0].text as string
+    expect(text).toBe(`${SECRET} and a guess ⟨cx:7⟩`)
+  })
+})
