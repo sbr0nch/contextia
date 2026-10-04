@@ -17,6 +17,15 @@ describe('isLoopbackUrl', () => {
   })
 })
 
+import { DEFAULT_STATS_URL } from '../src/reporter.js'
+
+describe('the default dashboard address', () => {
+  it('is the local proxy, and is itself loopback', () => {
+    expect(DEFAULT_STATS_URL).toBe('http://127.0.0.1:8787/__contextia/events')
+    expect(isLoopbackUrl(DEFAULT_STATS_URL)).toBe(true)
+  })
+})
+
 describe('postEvents', () => {
   afterEach(() => vi.unstubAllGlobals())
   const ev: CxEvent = { ts: 't', site: 's', detector: 'd', action: 'warn', count: 1 }
@@ -28,6 +37,13 @@ describe('postEvents', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('does not post an empty batch, even to a loopback URL', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    await postEvents('http://127.0.0.1:8787/__contextia/events', [])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('posts a counts-only batch to a loopback URL', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
@@ -35,5 +51,7 @@ describe('postEvents', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
     const [, init] = fetchMock.mock.calls[0]!
     expect(JSON.parse(init.body)).toEqual({ events: [ev] })
+    expect(init.method).toBe('POST')
+    expect(init.headers).toEqual({ 'content-type': 'application/json' })
   })
 })

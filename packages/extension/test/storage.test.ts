@@ -93,3 +93,58 @@ describe('clearAll', () => {
     expect((await getSettings()).mode).toBe('off')
   })
 })
+
+describe('defaults and stored shape', () => {
+  // These are the promises the privacy policy makes, as values. The extension
+  // makes no network request until the user turns the local dashboard on, it only
+  // warns until the user picks a stricter mode, and it adds no note to the
+  // user's text unless asked.
+  it('ships with every opt-in off', () => {
+    expect(DEFAULT_SETTINGS).toEqual({
+      mode: 'warn',
+      enabledDetectors: null,
+      severityOverrides: {},
+      allowlist: { values: [], patterns: [] },
+      redactlist: { values: [], patterns: [] },
+      signature: false,
+      localStatsEnabled: false,
+      localStatsUrl: '',
+    })
+  })
+
+  // Settings, the log and the counters live under these three names. Renaming one
+  // in a release silently resets every user's settings and history on update.
+  it('keeps the storage key names that existing installs already hold', async () => {
+    await setSettings({ ...DEFAULT_SETTINGS, mode: 'block' })
+    await appendLog([logEntry()])
+    await bumpStats({ caught: 1 })
+    const stored = await chrome.storage.local.get(null)
+    expect(Object.keys(stored).sort()).toEqual(['log', 'settings', 'stats'])
+  })
+
+  it('loads settings saved by an older release that knew fewer fields, filling the rest from the defaults', async () => {
+    await chrome.storage.local.set({ settings: { mode: 'block', enabledDetectors: ['private_key'] } })
+    expect(await getSettings()).toEqual({ ...DEFAULT_SETTINGS, mode: 'block', enabledDetectors: ['private_key'] })
+  })
+
+  it('adds a leaked count to the total, and every counter on its own', async () => {
+    await bumpStats({ caught: 1, redacted: 2, leaked: 3, allowed: 4 })
+    await bumpStats({ leaked: 1 })
+    expect(await getStats()).toEqual({ caught: 1, redacted: 2, leaked: 4, allowed: 4 })
+  })
+
+  it('keeps only the newest 200 log entries, newest first', async () => {
+    await appendLog(Array.from({ length: 150 }, (_, i) => logEntry({ ts: i })))
+    await appendLog(Array.from({ length: 150 }, (_, i) => logEntry({ ts: 1000 + i })))
+    const log = await getLog()
+    expect(log).toHaveLength(200)
+    expect(log[0]!.ts).toBe(1000)
+    expect(log[150]!.ts).toBe(0) // then the oldest batch, cut at 200 in all
+    expect(log[199]!.ts).toBe(49)
+  })
+
+  it('does not write when there is nothing to append', async () => {
+    await appendLog([])
+    expect(await chrome.storage.local.get(null)).toEqual({})
+  })
+})

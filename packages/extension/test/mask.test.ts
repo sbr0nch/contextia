@@ -17,4 +17,12 @@ describe('mask', () => {
       expect(shown, `length ${len}`).toBeLessThanOrEqual(Math.floor(len / 5))
     }
   })
+  it('changes how much it shows at exactly 20 and 40 characters, and always says the length', () => {
+    const v = (n: number) => 'abcdefghij'.repeat(5).slice(0, n)
+    expect(mask(v(11))).toBe('a\u2026a \u00b7 11 chars')
+    expect(mask(v(19))).toBe('a\u2026i \u00b7 19 chars')
+    expect(mask(v(20))).toBe('ab\u2026ij \u00b7 20 chars')
+    expect(mask(v(39))).toBe('ab\u2026hi \u00b7 39 chars')
+    expect(mask(v(40))).toBe('abcd\u2026ghij \u00b7 40 chars')
+  })
 })
