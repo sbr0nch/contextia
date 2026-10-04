@@ -25,7 +25,6 @@ const TARGETS = {
   engine: {
     pkg: 'packages/engine',
     copy: ['src', 'test', 'rules', 'acceptance', 'tsconfig.json'],
-    deps: { '@vitest/coverage-v8': '^4.1.10' },
     test: { include: ['test/**/*.test.ts'], environment: 'node' },
     modules: { 'src/detect.ts': 90, 'src/redact.ts': 90, 'src/custom.ts': 90, 'src/detectors/_util.ts': 90 },
   },
@@ -39,7 +38,7 @@ const TARGETS = {
   extension: {
     pkg: 'packages/extension',
     copy: ['src', 'test', 'tsconfig.json'],
-    deps: { '@types/chrome': '^0.3.4', 'happy-dom': '^20.14.5' },
+    link: ['happy-dom'],
     test: { include: ['test/**/*.test.ts'], environment: 'node', setupFiles: ['./test/setup.ts'] },
     modules: { 'src/gate.ts': 95, 'src/storage.ts': 95, 'src/reporter.ts': 95, 'src/mask.ts': 95, 'src/send-button.ts': 80 },
   },
@@ -64,17 +63,23 @@ for (const name of names) {
   const dir = mkdtempSync(join(tmpdir(), `contextia-mut-${name}-`))
   try {
     for (const f of t.copy) cpSync(join(root, t.pkg, f), join(dir, f), { recursive: true })
+    // Only Stryker and TypeScript 5 are installed here. vitest and the rest come from the
+    // checkout's own node_modules (run `npm ci` first): a fresh `npm install` of vitest from the
+    // registry failed on its dependency tree with an npm error, and the lockfile's versions are
+    // the ones the tests are meant to run on anyway.
     const deps = {
       '@stryker-mutator/core': '^10.0.0',
       '@stryker-mutator/vitest-runner': '^10.0.0',
-      '@types/node': '^22.0.0',
       typescript: '^5.9.3',
-      vitest: '^4.1.10',
-      ...(t.deps ?? {}),
     }
     writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: `mut-${name}`, private: true, type: 'module', dependencies: deps }))
     writeFileSync(join(dir, 'vitest.config.ts'), `import { defineConfig } from 'vitest/config'\nexport default defineConfig({ test: ${JSON.stringify(t.test)} })\n`)
-    run('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error'], dir, true)
+    run('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error', '--legacy-peer-deps'], dir, true)
+    for (const lib of ['vitest', 'vite', ...(t.link ?? [])]) {
+      const from = join(root, 'node_modules', lib)
+      if (!existsSync(from)) throw new Error(`${lib} is not in ${join(root, 'node_modules')}: run npm ci first`)
+      symlinkSync(from, join(dir, 'node_modules', lib), 'junction')
+    }
     if (t.engine) {
       // the CLI resolves the engine by name: point it at the built copy in this checkout
       mkdirSync(join(dir, 'node_modules', '@sbr0nch'), { recursive: true })
