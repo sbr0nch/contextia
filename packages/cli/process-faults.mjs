@@ -16,6 +16,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'no
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { waitForPort } from './wait-port.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const CLI = join(here, 'dist/cli.js')
@@ -135,7 +136,7 @@ for (const sig of ['SIGTERM', 'SIGINT']) {
   await new Promise((r) => closed.close(r))
   const port = 20000 + Math.floor(Math.random() * 20000)
   const p = spawn(process.execPath, [CLI, 'proxy', '--port', String(port), '--upstream', `http://127.0.0.1:${deadPort}`], { stdio: 'ignore' })
-  await sleep(900)
+  await waitForPort(port, p)
   const res = await fetch(`http://127.0.0.1:${port}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"messages":[]}' }).catch((e) => ({ status: 0, text: async () => String(e) }))
   const text = await res.text()
   p.kill()

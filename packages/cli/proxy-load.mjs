@@ -14,6 +14,7 @@ import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { waitForPort } from './wait-port.mjs'
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), 'dist/cli.js')
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -40,7 +41,7 @@ await new Promise((r) => upstream.listen(0, '127.0.0.1', r))
 async function withProxy(extra, fn) {
   const port = 20000 + Math.floor(Math.random() * 20000)
   const p = spawn(process.execPath, [CLI, 'proxy', '--port', String(port), '--upstream', `http://127.0.0.1:${upstream.address().port}`, ...extra], { stdio: 'ignore' })
-  await sleep(900)
+  await waitForPort(port, p)
   try {
     return await fn(port, p)
   } finally {
