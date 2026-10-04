@@ -65,13 +65,14 @@ const STYLE = `
 
 .cx-pop {
   position: fixed; right: 14px; bottom: 52px; z-index: 2147483647;
-  width: 300px; max-height: 52vh; overflow: auto; color: #e9eaee;
+  width: 320px; max-width: calc(100vw - 24px); max-height: 52vh; overflow: auto; color-scheme: dark; scrollbar-color: #4a4a52 transparent; color: #e9eaee;
   border-radius: 14px; font: 12px/1.45 ${FONT};
   transform-origin: bottom right; transform: translateY(8px) scale(.96);
 }
 .cx-pop.cx-on { transform: none; }
-.cx-head { padding: 12px 13px; display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,.06); }
-.cx-title { font-weight: 700; font-size: 12px; }
+.cx-head { padding: 12px 13px; display:flex; justify-content:space-between; align-items:center; gap:8px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.cx-title { font-weight: 700; font-size: 12px; min-width: 0; }
+.cx-go, .cx-ghost, .cx-mini { white-space: nowrap; }
 .cx-go { background: ${BRAND}; color: #08130d; border: 0; border-radius: 8px; padding: 5px 10px; font-weight: 700; cursor: pointer; font-size: 11px; transition: background .14s ${EASE}; }
 .cx-go:hover { background: #19e08f; }
 .cx-row { padding: 11px 13px; }

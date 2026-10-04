@@ -69,6 +69,21 @@ The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reprod
 
 - In Block mode an Enter pressed within about 100 ms of the secret appearing went through:
   the handlers decided from a scan that runs 150 ms after the last input. They rescan first.
+- With two editors on the page (the composer, and the box that opens to edit a sent message)
+  a send was judged on the first one: a secret in the edit box went through in Block mode, and
+  a clean edit box was stopped for a secret sitting in the other. The editor is now taken from
+  the event.
+- Accessibility, measured with axe-core and the keyboard: the popup had no title or landmark and
+  a mode menu with no name; the settings page had 85 unlabelled checkboxes; the in-page
+  indicator was a `div` with no role or keyboard use; its panel went grey on a white page and
+  its small text measured 1.6:1 (4.5:1 is the minimum). It is now a button that opens a dialog
+  from Enter or Space, the panel is nearly opaque, and a blocked send is announced (role=alert).
+- In Block mode an Enter pressed on Contextia's own indicator or on "Redact all" was read as a
+  send and stopped, so a keyboard user could not resolve a block.
+- When the browser's storage could not be read the popup spun forever and the settings page
+  stayed blank with an uncaught error. Both now say so and offer "Try again".
+- Seen in a real Firefox: a white scrollbar track inside the dark detector list, and the
+  findings panel's title crowding its buttons. Fixed (dark scrollbars, a 320 px panel).
 
 **Build**
 
@@ -76,7 +91,13 @@ The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reprod
   the 2.0.4 release included. The engine is built before typecheck and tests.
   `npm run test:clean` runs clone, `npm ci`, `verify`.
 - `npm run test:pack` also fails when the committed plugin bundle is not what a build
-  produces.
+  produces, and runs on Windows (it ran the installed CLI through npm's shell shim).
+- Browser checks in CI: `test:a11y` (axe-core, keyboard), `test:states` (every screen in 18
+  states at phone and desktop widths, with a fingerprint of each picture) and `test:firefox`
+  (the extension installed in a real Firefox, driven with real key presses).
+- A `Platforms` workflow runs the CLI, proxy and hook checks on Windows and macOS, Node 20 and 22;
+  a scheduled `Mutation` workflow (`scripts/mutation.mjs`) scores the unit tests on the engine,
+  proxy, core, JSON reader and the extension's pure modules.
 
 **Behaviour that changes**: exit 2 for an unknown command or bad port; shorter previews;
 the proxy blocks and redacts more requests than before; `internal_hostname` stops at the

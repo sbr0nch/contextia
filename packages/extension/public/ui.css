@@ -1,4 +1,6 @@
 :root {
+  color-scheme: dark;
+  scrollbar-color: #4a4a52 transparent; /* Firefox drew a white scrollbar track inside the dark list */
   --bg: #0a0a0a;
   --panel: #1a1a1a;
   --panel-2: #242424;

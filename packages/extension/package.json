@@ -16,6 +16,7 @@
     "test:dom": "node build.mjs && node dom-integration.mjs",
     "test:a11y": "node build.mjs && node a11y.mjs",
     "test:states": "node build.mjs && node states.mjs",
+    "test:firefox": "node firefox.mjs",
     "test:states:update": "node build.mjs && node states.mjs --update"
   },
   "devDependencies": {
