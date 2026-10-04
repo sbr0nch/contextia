@@ -2,6 +2,86 @@
 
 ## Unreleased
 
+Changes after 2.1.0, found the same way: by running each surface as a user does, in real
+browsers and on Windows and macOS, and by looking at the pictures. Every fix has a test that
+fails without it; the measurements are in `docs/COVERAGE.md`.
+
+**Proxy**
+
+- Redact parsed the body and wrote it out again, which is not a faithful copy: `9007199254740993`
+  became `9007199254740992`, `1.10` became `1.1`, a repeated key was dropped. The edit is now made
+  on the text the client sent (a reader that agrees with `JSON.parse` on 80,000 random and mutated
+  documents), so a body with nothing to redact is forwarded byte for byte. A secret used as an
+  object key was never read; keys are scanned, blocked and redacted. A key that appears twice is
+  refused in Block mode: `JSON.parse` keeps the last, another parser keeps the first.
+- A 300 MB body took the proxy to 1,268 MB: it was read whole, with no limit. A body over 64 MB is
+  answered 413 without being forwarded (peak memory for the same 300 MB: 130 MB), and the scan cap
+  goes from 5 MB to 32 MB, so a 6 MB image request is no longer refused in Block mode. Decompression
+  stops at the same cap. After a 413 the rest of the body is read and dropped (for at most 30 s),
+  because on Windows and macOS the client otherwise saw a reset instead of the answer.
+- `--reversible` did not restore a placeholder that a streamed reply cut across deltas
+  (`⟨cx`, `:1`, `⟩`): the client received the placeholder. The text deltas are now joined
+  per field before restoring. Tested with a stand-in streaming server, not a live model. The
+  reply is still held until it is complete.
+- An unreachable upstream was answered with `TypeError: fetch failed`; the reply now names the
+  upstream and the cause (`ECONNREFUSED`).
+
+**Engine**
+
+- `env_secret` only saw an assignment at the start of a line, so `OPENAI_API_KEY=sk-... python app.py`,
+  `docker run -e DB_PASSWORD=...` and a secret in a sentence went unseen (found by wrapping every
+  detector's fixtures in 15 real contexts: 32 of 3,015 failed, all this one). An UPPER_CASE
+  assignment is now read in the middle of a line too; a lower-case key still needs a line start
+  (case-insensitive it flagged 144 minified-code fragments in 3,311 files of `node_modules`; as
+  built, none). A shell variable (`$NAME`), a regular expression literal and a mid-line value holding
+  brackets, braces, commas or semicolons (a minified bundle) are not values.
+
+**CLI**
+
+- `contextia proxy` on a port that is taken crashed with `Unhandled error event`. It says the port
+  is in use (or not allowed) and exits 1.
+
+**Claude Code plugin**
+
+- The block could be lost: the hook called `process.exit()` right after writing, and on a pipe
+  written asynchronously the message never left the process and the prompt went through. It now
+  exits from the write callback.
+
+**Browser extension**
+
+- With two editors on the page (the composer, and the box that opens to edit a sent message)
+  a send was judged on the first one: a secret in the edit box went through in Block mode, and
+  a clean edit box was stopped for a secret sitting in the other. The editor is now taken from
+  the event.
+- Accessibility, measured with axe-core and the keyboard: the popup had no title or landmark and
+  a mode menu with no name; the settings page had 85 unlabelled checkboxes; the in-page
+  indicator was a `div` with no role or keyboard use; its panel went grey on a white page and
+  its small text measured 1.6:1 (4.5:1 is the minimum). It is now a button that opens a dialog
+  from Enter or Space, the panel is nearly opaque, and a blocked send is announced (role=alert).
+- In Block mode an Enter pressed on Contextia's own indicator or on "Redact all" was read as a
+  send and stopped, so a keyboard user could not resolve a block.
+- When the browser's storage could not be read the popup spun forever and the settings page
+  stayed blank with an uncaught error. Both now say so and offer "Try again".
+- Seen in a real Firefox: a white scrollbar track inside the dark detector list, and the
+  findings panel's title crowding its buttons. Fixed (dark scrollbars, a 320 px panel).
+
+**Build and checks**
+
+- `npm run test:pack` runs on Windows (it ran the installed CLI through npm's shell shim).
+- Browser checks in CI: `test:a11y` (axe-core, keyboard), `test:states` (every screen in 18
+  states at phone and desktop widths, with a fingerprint of each picture) and `test:firefox`
+  (the extension installed in a real Firefox, driven with real key presses).
+- A `Platforms` workflow runs the CLI, proxy and hook checks on Windows and macOS, Node 20 and 22;
+  a scheduled `Mutation` workflow (`scripts/mutation.mjs`) scores the unit tests on the engine,
+  proxy, core, JSON reader and the extension's pure modules.
+
+**Behaviour that changes**: Block accepts bodies up to 32 MB (it refused anything over 5 MB) and a
+request over 64 MB is answered 413; a body with a repeated key is refused in Block mode;
+`env_secret` finds more (upper-case assignments anywhere in a line); the findings panel is 320 px
+wide instead of 300.
+
+## v2.1.0
+
 Found by running every surface the way a user does, with planted secrets and hostile
 input, and by comparing with a second tool. Every fix has a test that fails without it.
 The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reproduces them.
@@ -19,36 +99,13 @@ The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reprod
 - `--reversible` returned an invalid reply when the secret held a newline, a quote or a
   backslash (a PEM key, a connection string): both the JSON and the SSE answer stopped
   parsing. The value now goes back JSON-escaped.
-- `--reversible` did not restore a placeholder that a streamed reply cut across deltas
-  (`⟨cx`, `:1`, `⟩`): the client received the placeholder. The text deltas are now joined
-  per field before restoring. Tested with a stand-in streaming server, not a live model.
 - The proxy's own pages answered any web page the user had open: a text/plain POST
   put 99,999 fake events into the stats, and stats and the dashboard answered a foreign
   `Host`, which is what DNS rebinding sends. Both are refused.
-- A 400 KB gzip body was expanded to 400 MB. Decompression stops at the scan cap (32 MB).
-- Redact parsed the body and wrote it out again, which is not a faithful copy: `9007199254740993`
-  became `9007199254740992`, `1.10` became `1.1`, a repeated key was dropped. The edit is now made
-  on the text the client sent (a reader that agrees with `JSON.parse` on 80,000 random and mutated
-  documents), so a body with nothing to redact is forwarded byte for byte. A secret used as an
-  object key was never read; keys are scanned, blocked and redacted. A key that appears twice is
-  refused in Block mode: `JSON.parse` keeps the last, another parser keeps the first.
-- A 300 MB body took the proxy to 1,268 MB: it was read whole, with no limit. A body over 64 MB is
-  answered 413 without being forwarded (peak memory for the same 300 MB: 130 MB), and the scan cap
-  goes from 5 MB to 32 MB, so a 6 MB image request is no longer refused in Block mode. After a 413
-  the rest of the body is read and dropped (for at most 30 s), because on Windows and macOS the
-  client otherwise saw a reset instead of the answer.
-- An unreachable upstream was answered with `TypeError: fetch failed`; the reply now names the
-  upstream and the cause (`ECONNREFUSED`).
+- A 400 KB gzip body was expanded to 400 MB. Decompression stops at the 5 MB scan cap.
 
 **Engine**
 
-- `env_secret` only saw an assignment at the start of a line, so `OPENAI_API_KEY=sk-... python app.py`,
-  `docker run -e DB_PASSWORD=...` and a secret in a sentence went unseen (found by wrapping every
-  detector's fixtures in 15 real contexts: 32 of 3,015 failed, all this one). An UPPER_CASE
-  assignment is now read in the middle of a line too; a lower-case key still needs a line start
-  (case-insensitive it flagged 144 minified-code fragments in 3,311 files of `node_modules`; as
-  built, none). A shell variable (`$NAME`), a regular expression literal and a mid-line value holding
-  brackets, braces, commas or semicolons (a minified bundle) are not values.
 - `email`, `internal_hostname` and `db_connection_string` were quadratic (6.4 s, 6.3 s and
   3.7 s on 80 KB), and `private_key` took 11.7 s on 1 MB of repeated headers. On a
   paste, a prompt or a request that froze the browser tab, the proxy or the hook. All
@@ -63,8 +120,6 @@ The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reprod
 - `contextia scan .` skipped every dotfile but `.env`, so `.env.production`, `.env.local`
   and `.aws/credentials` were never read. Present in every release since 0.1.0. It reads
   them now, follows symlinks to files and reads a file reachable under two names once.
-- `contextia proxy` on a port that is taken crashed with `Unhandled error event`. It says the port
-  is in use (or not allowed) and exits 1.
 - A file over the engine's 1,000,000-character cap printed a warning and "0 secrets found",
   exit 0, and `redact` printed the tail in clear. It is scanned in windows now.
 - `scan --json` through a pipe stopped at 65,536 bytes (807,789 expected), so the JSON did not
@@ -79,29 +134,11 @@ The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reprod
 - The hook crashed open: a missing bundle, a prompt field that was not text, or a stdin it
   could not read sent the prompt anyway, because the host treats a crash as non-blocking.
   It blocks, with a reason, whenever it cannot scan.
-- The block could be lost: the hook called `process.exit()` right after writing, and on a pipe
-  written asynchronously the message never left the process and the prompt went through. It now
-  exits from the write callback.
 
 **Browser extension**
 
 - In Block mode an Enter pressed within about 100 ms of the secret appearing went through:
   the handlers decided from a scan that runs 150 ms after the last input. They rescan first.
-- With two editors on the page (the composer, and the box that opens to edit a sent message)
-  a send was judged on the first one: a secret in the edit box went through in Block mode, and
-  a clean edit box was stopped for a secret sitting in the other. The editor is now taken from
-  the event.
-- Accessibility, measured with axe-core and the keyboard: the popup had no title or landmark and
-  a mode menu with no name; the settings page had 85 unlabelled checkboxes; the in-page
-  indicator was a `div` with no role or keyboard use; its panel went grey on a white page and
-  its small text measured 1.6:1 (4.5:1 is the minimum). It is now a button that opens a dialog
-  from Enter or Space, the panel is nearly opaque, and a blocked send is announced (role=alert).
-- In Block mode an Enter pressed on Contextia's own indicator or on "Redact all" was read as a
-  send and stopped, so a keyboard user could not resolve a block.
-- When the browser's storage could not be read the popup spun forever and the settings page
-  stayed blank with an uncaught error. Both now say so and offer "Try again".
-- Seen in a real Firefox: a white scrollbar track inside the dark detector list, and the
-  findings panel's title crowding its buttons. Fixed (dark scrollbars, a 320 px panel).
 
 **Build**
 
@@ -109,13 +146,7 @@ The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reprod
   the 2.0.4 release included. The engine is built before typecheck and tests.
   `npm run test:clean` runs clone, `npm ci`, `verify`.
 - `npm run test:pack` also fails when the committed plugin bundle is not what a build
-  produces, and runs on Windows (it ran the installed CLI through npm's shell shim).
-- Browser checks in CI: `test:a11y` (axe-core, keyboard), `test:states` (every screen in 18
-  states at phone and desktop widths, with a fingerprint of each picture) and `test:firefox`
-  (the extension installed in a real Firefox, driven with real key presses).
-- A `Platforms` workflow runs the CLI, proxy and hook checks on Windows and macOS, Node 20 and 22;
-  a scheduled `Mutation` workflow (`scripts/mutation.mjs`) scores the unit tests on the engine,
-  proxy, core, JSON reader and the extension's pure modules.
+  produces.
 
 **Behaviour that changes**: exit 2 for an unknown command or bad port; shorter previews;
 the proxy blocks and redacts more requests than before; `internal_hostname` stops at the
