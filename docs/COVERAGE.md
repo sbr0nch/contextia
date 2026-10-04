@@ -1,7 +1,8 @@
 # Mappa di copertura (livelli x superfici)
 
 Misurata il 2026-10-04. Base: `main` @ `ecaa583` (v2.0.4). Node 22.22; la suite e'
-verde anche su Node 20.20, la versione del CI.
+verde anche su Node 20.20, la versione del CI. Aggiornata a fine lotto: browser veri
+(Chromium 141, Chrome for Testing 154, Firefox 157), Windows e macOS in CI.
 
 Legenda: **VERDE** = misurato e tenuto da una legge che resta nel repo e che e'
 stata vista diventare rossa (sabotando il codice, o sul codice vecchio). Fanno
@@ -16,10 +17,10 @@ dentro e' un verde parziale.
 | Cosa | Prima | Dopo |
 |---|---|---|
 | `npm ci && npm run verify` su clone pulito | **falliva dopo 1 s** (il motore non aveva `dist/`, il typecheck dell'estensione non lo trovava). La CI di `main` e' rossa sugli ultimi 5 push, release 2.0.4 compresa | verde in 19 s (`npm run test:clean`) |
-| Test (unit + acceptance) | 595 | 901 (motore 692, CLI 123, estensione 54, acceptance 32) |
-| Casi di processo (docs, pack, proxy, browser) | 32 | 44 |
+| Test (unit + acceptance) | 595 | 3.981 (motore 3.742, CLI 153, estensione 54, acceptance 32; 3.015 del motore sono la legge dei contesti) |
+| Casi di processo (docs 20, pack 7, proxy 26, browser: dom 15, a11y 19, schermate 18, Firefox 14) | 32 | 119 |
 | `verify` | 7,6 s | 25 s (le leggi sui dati ostili da sole ne valgono circa 7) |
-| `npm audit` | 3 moderate, solo dev (vitest, path traversal nel mock) | invariato; `--omit=dev`: 0 |
+| `npm audit` | 3 moderate, solo dev (vitest, path traversal nel mock) | invariato; `--omit=dev`: 0. Il rimedio e' vitest 5, che richiede Node >= 22.12: il prodotto dichiara Node >= 20 e il CI lo prova, quindi non lo prendo (la PR dependabot resta rossa per questo) |
 | Dipendenze a runtime | 0 (il CLI incorpora il motore) | 0 |
 | Licenze nel grafo | MIT, Apache-2.0, BSD, ISC; 3 MPL-2.0 solo dev | invariato |
 | Rilevatori | 83 (il README dice "50+") | 83 |
@@ -49,6 +50,18 @@ Peso = misura fatta prima di correggere. Ogni correzione ha la sua legge, vista 
 | D7 | CLI | `contextia scna .` stampava l'help ed usciva 0; `--port abc` stack trace | exit 2 con messaggio | `test:docs` |
 | D10 | build | `verify` falliva su clone pulito | build del motore prima di typecheck/test; `test:clean` | CI + `test:clean` |
 | D17 | CLI (regressione mia, trovata dal revisore) | finestre con 64 KB di sovrapposizione: chiave piu' lunga persa, token a cavallo riportato due volte | vedi D5 | `core.test.ts` (griglia di posizioni, indipendente dalle costanti) |
+| D18 | proxy redact | il corpo passava per parse e stringify: `9007199254740993` diventava `...992`, `1.10` diventava `1.1`, una chiave ripetuta spariva, un segreto in una chiave non era letto | lettore che registra dove sta ogni stringa e chiave; il redact e' fatto sul testo originale; chiave doppia rifiutata in Block | `json.test.ts` (80.000 documenti contro `JSON.parse`), `proxy-behaviour.test.ts` |
+| D19 | proxy, memoria | un corpo da 300 MB portava il proxy a 1.268 MB (letto intero, senza tetto) | oltre 64 MB: 413 senza inoltro (picco 130 MB); tetto di scansione da 5 a 32 MB | `proxy-behaviour.test.ts` |
+| D21 | proxy, Windows e macOS | dopo un 413 il client vedeva ECONNRESET (Windows) o EPIPE (macOS) invece della risposta | il resto del corpo e' letto e scartato (al piu' 30 s) | CI `Platforms` |
+| D22 | CLI | una porta occupata: `Unhandled error event`; un upstream irraggiungibile: `TypeError: fetch failed` | messaggio con porta e motivo, exit 1; il 502 nomina upstream e causa | `process-faults.mjs` (15 casi, processi veri) |
+| D23 | hook del plugin | il blocco poteva andare perso su una pipe asincrona: `process.exit()` subito dopo `write()` | esce dal callback della scrittura | `hook.test.ts` (4 casi con stdout ritardato) |
+| D24 | estensione | un invio da un secondo editor (la modifica di un messaggio) era giudicato sul testo del primo: un segreto passava, un editor pulito era fermato | l'editor si prende dall'evento | `test:dom` (5 casi) |
+| D25 | estensione, accessibilita' | 85 checkbox senza nome, popup senza titolo e senza landmark, indicatore `div` senza ruolo ne' tastiera, contrasto 1,6:1 (minimo 4,5:1), blocco annunciato per 4 s | titoli, ruoli, nomi; l'indicatore e' un bottone con dialogo; pannello quasi opaco; `role=alert` | `test:a11y` (19 controlli) |
+| D26 | estensione, Block | un Invio sull'indicatore o su "Redact all" era letto come un invio e fermato: da tastiera non si risolveva il blocco | gli eventi dell'interfaccia propria non sono giudicati | `test:a11y` |
+| D27 | estensione | con lo storage non leggibile il popup girava per sempre e la pagina delle opzioni restava bianca con un errore non gestito | messaggio e "Riprova" | `test:states` |
+| D28 | estensione, Firefox 157 | traccia di scorrimento bianca nella lista scura; il titolo del pannello addossato ai pulsanti (visti guardando le foto, non da un controllo) | `scrollbar-color`, pannello da 320 px | `test:firefox` (2 controlli) |
+| D29 | motore | `env_secret` vedeva `KEY=valore` solo a inizio riga: `OPENAI_API_KEY=sk-... python app.py` passava (32 casi su 3.015 nei contesti) | maiuscolo anche a meta' riga; `$VAR`, letterali regex e valori con `( ) { } , ;` non sono valori | `context.test.ts`, fixture |
+| D30 | proxy `--reversible` | un segnaposto spezzato su piu' eventi in streaming restava segnaposto | le stringhe di un campo sono unite in ordine prima del restauro | `proxy-reversible.test.ts` (3 formati, ogni posizione) |
 
 ## 3. Mappa
 
@@ -60,29 +73,35 @@ Peso = misura fatta prima di correggere. Ogni correzione ha la sua legge, vista 
 | 4 | proxy | 3/C | ogni forma di richiesta reale | 15 forme, processo vero | VERDE (D2, D15, D16) | `proxy-shapes.test` |
 | 5 | proxy | 5b | cosa arriva all'upstream | upstream registrante, intestazioni, metodi, tetti | VERDE | `proxy-behaviour.test` |
 | 6 | proxy | 7 | upstream che cade, client che sparisce, richiesta malformata, 50 concorrenti | processo vero | VERDE | `test:proxy` |
-| 7 | proxy | 7/5c | `--reversible` valido | JSON, SSE, testo; PEM, quote, backslash | VERDE per risposte non a flusso; **NON PROVATO** quando il modello spezza il token su piu' eventi SSE | `proxy-reversible.test` |
+| 7 | proxy | 7/5c | `--reversible` valido | JSON, SSE, testo; PEM, quote, backslash | VERDE per risposte non a flusso e per segnaposto spezzati su piu' eventi (3 formati, ogni posizione, upstream finto: D30); **NON PROVATO** con un modello vero | `proxy-reversible.test` |
 | 8 | proxy | 4 | pagine locali: pagina web, Host estraneo | richieste con `Origin` e `Host` falsi | VERDE (D11) | `proxy-local.test` |
 | 9 | proxy | 11 | bomba di decompressione, annidamento 200.000, 5 MB | gzip/deflate/brotli | VERDE (D12) | `proxy-local.test`, `proxy-shapes.test` |
-| 10 | proxy | 11 | JSON con chiavi duplicate, numeri oltre 2^53, segreto in una chiave | non coperto | GIALLO: vedi "non risolto" | - |
+| 10 | proxy | 11 | JSON con chiavi duplicate, numeri oltre 2^53, segreto in una chiave | 80.000 documenti casuali e mutati contro `JSON.parse` | VERDE (D18) | `json.test` |
 | 11 | CLI `scan`/`redact` | 5b/10 | dotfile, symlink, file grandi, pipe | processo vero | VERDE (D4, D5, D13) | `test:docs` |
 | 12 | CLI | 3/S | l'anteprima non rivela il segreto | tutte le lunghezze 1..300 | VERDE (D6) | `core.test`, `mask.test` |
 | 13 | CLI | 5c | exit code onesti, help | processo vero | VERDE (D7) | `test:docs` |
 | 14 | CLI | E | `--json` valido: vuoto, nomi con virgolette/newline/tab/accenti, 3000 righe su pipe | processo vero | VERDE | `test:docs` |
 | 15 | hook plugin | 7/11 | blocca sempre; cosa fa se non puo' leggere | processo vero, 16 casi | VERDE (D8) | `hook.test` |
-| 16 | estensione | 5a | Invio subito dopo il segreto in Block | Chromium vero | VERDE (D9) | `test:dom` |
+| 16 | estensione | 5a | Invio subito dopo il segreto in Block; secondo editor | Chromium 141 e Chrome for Testing 154 | VERDE (D9, D24) | `test:dom` |
 | 17 | estensione | 3 | composer a blocchi (Lexical, ProseMirror, Quill, textarea) | Chromium vero | VERDE | `test:dom` |
 | 18 | estensione | 3/S | log senza il segreto; default che mantengono la privacy | `storage.test` (default `localStatsEnabled: false`) | VERDE | `storage.test` |
 | 19 | estensione | 11 | zero rete salvo loopback opt-in | `no-network.test`, `reporter.test` | VERDE | idem |
 | 20 | estensione | 8 | impostazioni salvate da release vecchie | nomi delle chiavi di storage, forma parziale | GIALLO: **simulato**, non su un'installazione vera | `storage.test` |
-| 21 | estensione | 12/P/V/GV | accessibilita', contrasto, larghezze, tema | non misurato | VUOTO | - |
+| 21 | estensione | 12/P/V/GV | accessibilita', contrasto, larghezze | axe-core + tastiera su popup, opzioni, indicatore; pagina bianca, grigia, scura; 3 larghezze | VERDE (D25, D26) | `test:a11y` |
 | 22 | pacchetti | 8 | installazione da fuori workspace | `test:pack` | VERDE | `test:pack` |
 | 23 | pacchetti | 8 | il bundle del plugin e' il motore corrente | rebuild e confronto byte per byte | VERDE | `test:pack` |
 | 24 | repo | 8 | clone pulito -> verify verde | `test:clean` | VERDE (D10) | `scripts/test-clean-clone.mjs` |
 | 25 | release | 8 | installazione e uso di OGNI release vecchia | 10 release CLI installate e usate su un fixture | misurato a mano: tutte installano e rispondono uguale; nessuna legge nel repo | GIALLO |
-| 26 | motore | M | mutation testing | Stryker sul motore e sul codice nuovo | vedi sezione 4 | GIALLO |
+| 26 | motore, CLI, estensione | M | mutation testing | Stryker sulle suite unit, in una copia con TypeScript 5; job settimanale | vedi sezione 4 | GIALLO: `content.ts`, `ui.ts`, `options.ts`, `popup.ts` e `cli.ts` non muovono (logica DOM o di processo, coperta da test che Stryker non conta) |
 | 27 | motore | R/D | contro un oracolo indipendente | detect-secrets su 570 segreti casuali | misurato; script nel repo, non in CI | GIALLO |
 | 28 | tutto | 6/T | tempo, job, fusi | non applicabile (nessun job) | n/a | - |
 | 29 | proxy, hook, CLI | S | segreti esca in stderr, 403, anteprime, stats | 403 e motivi dell'hook senza il valore; anteprime <= 1/5; stats solo conteggi | VERDE per gli output elencati; **non** per log di terzi | `proxy-behaviour`, `hook.test` |
+| 30 | estensione | P/V | ogni schermata in 18 stati: vuoto, con attivita', storage in errore, impronta, bloccato, testo troppo lungo; 360-1280 px | scrive l'errore, testo leggibile, nessuno scorrimento laterale, impronta percettiva di ogni foto | VERDE (D27); l'impronta dice "e' cambiata", non "e' brutta": le foto vanno guardate | `test:states` |
+| 31 | estensione | 5a/P | Firefox 157 vero: installazione, popup, opzioni, digitazione vera, Block, Redact all | controllo remoto di Firefox (Marionette), `claude.ai` mappato su un server locale HTTPS | VERDE (D28); popup e opzioni come schede, non nella cornice della barra | `test:firefox` |
+| 32 | CLI, proxy, hook, pacchetti | 8 | Windows e macOS, Node 20 e 22 | `Platforms` in CI | VERDE per `verify`, `test:docs`, `test:pack`, `test:proxy`; **NON PROVATI** SIGTERM e SIGINT su Windows e la memoria su Windows | `.github/workflows/platforms.yml` |
+| 33 | motore | 3 | ogni fixture trovata nei contesti reali (virgolette, frase, code fence, CRLF, 90 KB prima, due volte, prima di un comando) | 3.015 casi | VERDE (D29) | `context.test` |
+| 34 | motore | 3 | falsi positivi su codice di altri | 3.322 file (21 MB) di `node_modules`, 83 rilevatori: 7 risultati (2 chiavi PEM di prova, 4 `utente:password@` di esempio, 1 `tokenValue = scanString(...)`) | misura; l'ultimo e' un falso positivo noto di `env_secret` a inizio riga | script non nel repo |
+
 
 ## 4. Numeri
 
@@ -145,35 +164,45 @@ di cartella: D4 c'era dall'inizio. L'import del motore fallisce in tutte tranne 
 
 ## 5. Non risolto (dichiarato, non nascosto)
 
-- **Redact riscrive il JSON**: un corpo con un segreto passa per `JSON.parse` e
-  `JSON.stringify`, quindi numeri oltre 2^53 e `1.10` cambiano (`9007199254740993` ->
-  `9007199254740992`). Pre-esistente.
-- **Token reversibili spezzati su piu' eventi SSE** (il modello li tokenizza): il
-  segreto non viene restaurato. Riprodotto con un upstream finto, **non** con un
-  modello vero. Idem un upstream che scrive `⟨`.
+Chiuso in questo lotto, e tolto da qui: il redact che riscriveva il JSON (D18), le chiavi
+doppie e i segreti nelle chiavi (D18), il corpo letto senza tetto (D19), il token
+reversibile spezzato (D30, con un upstream finto), il secondo editor (D24).
+
+- **`--reversible` tiene la risposta fino alla fine** e poi la restaura: l'agente la riceve
+  tutta insieme, non a pezzi. Il caso del segnaposto spezzato e' provato con un server
+  finto in tre formati di flusso, **non** con un modello vero.
+- **Chiave doppia nel JSON**: rifiutata in Block; in redact e warn la richiesta viene
+  inoltrata con un avviso su stderr, perche' non si sa quale valore l'upstream leggera'.
 - **Costo di molte stringhe piccole**: 100.000 stringhe da 2 caratteri (500 KB) bloccano
-  il proxy per 2,1 s. Un corpo da 5 MB puo' tenerlo occupato molti secondi.
-- **Chiavi duplicate nel JSON**: `JSON.parse` tiene l'ultima; se l'upstream tiene la
-  prima, la differenza non e' coperta. Un segreto in una chiave oggetto non e' letto.
+  il proxy per 2,1 s. Un corpo da 32 MB puo' tenerlo occupato molti secondi.
 - **Il contenuto di un blocco `thinking`** (firmato) non e' letto ne' riscritto.
-- **Block rifiuta corpi oltre 5 MB** (anche un'immagine legittima) e non scansiona oltre.
-  Il corpo e' letto interamente in memoria prima di questo controllo.
-- **Estensione**: la riscansione guarda il primo composer visibile, non quello da cui
-  parte l'Invio; con un secondo editor (modifica di un messaggio) non provato. Auto-redact
-  durante il keydown dipende dall'editor, non provato.
+- **Block rifiuta corpi oltre 32 MB** (e redact/warn li inoltrano con un avviso); oltre
+  64 MB la risposta e' 413. Il corpo e' letto in memoria: circa quattro volte la sua misura.
 - **Un match singolo oltre 250.000 caratteri** non si trova nella scansione a finestre.
+- **`env_secret`**: una chiave in minuscolo a meta' riga non e' letta (scelta: letta, segnalava
+  144 frammenti di codice minificato in 3.322 file); `tokenValue = scanString(...)` a inizio
+  riga resta un falso positivo; un segreto fatto di sole lettere non e' letto (scelta
+  dichiarata nel codice).
+- **Estensione**: Auto-redact durante il keydown dipende dall'editor, non provato su editor veri.
+- **Popup**: misurato come scheda a tutta larghezza, non nella cornice della barra del browser.
 
 ## 6. Cosa NON e' provato
 
-Windows e macOS (CLI, proxy, `contextia run`, Ctrl+C, il `process.exit` del hook su
-pipe); Firefox, Edge e Safari (dichiarati in `docs/BROWSERS.md`); i siti veri
-(ChatGPT, Claude, Gemini: il DOM dei test e' ricostruito); un agente vero dietro il
-proxy (Claude Code, Cursor, Windsurf: il README promette Cursor e Windsurf, non
-provati); modelli veri nelle risposte in streaming; accessibilita' e contrasto
-dell'estensione; aggiornamento dell'estensione su un'installazione vera; un
-fuzzer vero sul proxy (solo casi mirati); mutation testing di `cli.ts`, `content.ts`,
-`options.ts`, `ui.ts`; la cronologia degli store (Chrome serve la 2.0.1 secondo il
-messaggio della release 2.0.4, non verificato).
+- **Windows e macOS**: `verify`, `test:docs`, `test:pack`, `test:proxy` passano in CI su
+  Node 20 e 22. **Non provati**: SIGTERM e SIGINT su Windows (il test dice "NON PROVATO"), la
+  memoria su Windows, Ctrl+C reale in `contextia run`.
+- **Browser**: Chromium 141, Chrome for Testing 154 e Firefox 157 (add-on temporaneo, tastiera
+  vera). **Non provati**: Edge, Safari, Chrome stabile con l'installazione dallo store (da
+  Chrome 137 `--load-extension` non funziona piu' nelle build di marca), l'add-on firmato di
+  AMO, l'aggiornamento da una versione vecchia su un'installazione vera.
+- **Siti veri** (ChatGPT, Claude, Gemini): il DOM e' ricostruito, la pagina e' un finto
+  locale; l'aspetto dell'indicatore sopra il CSS vero di quei siti non e' stato visto.
+- **Un agente vero dietro il proxy** (Claude Code, Cursor, Windsurf, aider): non eseguiti; il
+  README lo dice. **Un modello vero** in streaming: non provato.
+- **Mutation testing** di `cli.ts`, `content.ts`, `ui.ts`, `options.ts`, `popup.ts`: non
+  muovono con Stryker (DOM e processi), sono coperti dai test di processo e di browser.
+- Un fuzzer vero sul proxy (solo casi mirati); la cronologia degli store (Chrome serve la
+  2.0.1 secondo il messaggio della release 2.0.4, non verificato).
 
 ---
 

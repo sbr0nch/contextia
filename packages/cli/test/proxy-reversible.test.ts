@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { createProxyServer, detokenize } from '../src/proxy.js'
+import { createProxyServer, detokenize, restoreStream } from '../src/proxy.js'
 
 // --reversible restores the original value inside the model's reply. The reply
 // is JSON (or SSE lines of JSON), and the token sits inside a JSON string. A
@@ -200,5 +200,81 @@ describe('--reversible restores a placeholder cut across streamed deltas', () =>
     const body = await reply(SHAPES['openai chat']!.frame, [3, 4, 5, 6], content)
     for (const l of body.split('\n').filter((x) => x.startsWith('data: ') && x !== 'data: [DONE]')) JSON.parse(l.slice(6))
     expect(said(body, SHAPES['openai chat']!.read)).toBe(content)
+  })
+})
+
+// restoreStream on its own, so each rule can be pinned with a small input.
+describe('restoreStream', () => {
+  const ev = (o: unknown) => `data: ${JSON.stringify(o)}`
+  const vault = new Map([['⟨cx:1⟩', 'AKIA-ONE'], ['⟨cx:2⟩', 'two"quoted\nline']])
+  const said = (text: string): string =>
+    text
+      .split('\n')
+      .filter((l) => l.startsWith('data:') && !l.includes('[DONE]'))
+      .map((l) => (JSON.parse(l.replace(/^data: ?/, '')) as { t: string }).t)
+      .join('')
+
+  it('returns a stream with no placeholder unchanged, byte for byte, escapes included', () => {
+    const raw = 'event: x\ndata: {"t":"caf\\u00e9 \\/ ok"}\n\ndata: [DONE]\n\n'
+    expect(restoreStream(raw, vault)).toBe(raw)
+  })
+
+  it('leaves an event with nothing to restore as it was written, even next to one that changes', () => {
+    const untouched = 'data: {"t":"caf\\u00e9 \\/ ok","n":1.10}'
+    const out = restoreStream(`${untouched}\n\n${ev({ t: '⟨cx:1⟩' })}\n\n`, vault)
+    expect(out.split('\n')[0]).toBe(untouched)
+    expect(said(out)).toBe('caf\u00e9 / okAKIA-ONE')
+  })
+
+  it('reads `data:` with and without the space', () => {
+    const out = restoreStream(`data:${JSON.stringify({ t: '⟨cx' })}\n\ndata:${JSON.stringify({ t: ':1⟩' })}\n\n`, vault)
+    expect(said(out)).toBe('AKIA-ONE')
+    expect(out).toContain('data:{')
+  })
+
+  it('restores a whole placeholder on a line that is not JSON, and leaves other lines alone', () => {
+    const out = restoreStream('event: ping\ndata: ⟨cx:1⟩ is here\n\ndata: [DONE]\n', vault)
+    expect(out).toBe('event: ping\ndata: AKIA-ONE is here\n\ndata: [DONE]\n')
+  })
+
+  it('keeps a value with a newline on one line when the data field is not JSON, so the stream is not cut', () => {
+    const out = restoreStream('data: ⟨cx:2⟩\n\n', vault)
+    expect(out.split('\n')).toEqual(['data: two\\"quoted\\nline', '', ''])
+  })
+
+  it('finds a placeholder that starts in a later delta, or exactly at the start of one', () => {
+    const cases: string[][] = [
+      ['ab', 'cd', '⟨cx', ':1⟩', 'ef'],
+      ['xx', '⟨cx:', '1⟩'],
+      ['⟨', 'c', 'x', ':', '1', '⟩'],
+      ['a⟨cx:1⟩b', '⟨cx:1⟩'],
+    ]
+    for (const pieces of cases) {
+      const out = restoreStream(pieces.map((t) => ev({ t })).join('\n\n') + '\n\n', vault)
+      expect(said(out), JSON.stringify(pieces)).toBe(pieces.join('').split('⟨cx:1⟩').join('AKIA-ONE'))
+    }
+  })
+
+  it('reads placeholders with two digits', () => {
+    const big = new Map<string, string>()
+    for (let i = 1; i <= 12; i++) big.set(`⟨cx:${i}⟩`, `value-${i}`)
+    const out = restoreStream([ev({ t: 'a ⟨cx:1' }), ev({ t: '0⟩ b ⟨cx:12⟩' })].join('\n\n') + '\n\n', big)
+    expect(said(out)).toBe('a value-10 b value-12')
+  })
+
+  it('restores two strings of the same event, and keeps the event valid JSON when the value needs escaping', () => {
+    const out = restoreStream(`${ev({ a: '⟨cx:1⟩', b: 'x ⟨cx:2⟩ y', c: 7 })}\n\n`, vault)
+    const parsed = JSON.parse(out.replace(/^data: /, '').trim()) as { a: string; b: string; c: number }
+    expect(parsed).toEqual({ a: 'AKIA-ONE', b: 'x two"quoted\nline y', c: 7 })
+  })
+
+  it('does not join strings that sit at different places', () => {
+    const out = restoreStream(`${ev({ a: '⟨cx', b: ':1⟩' })}\n\n`, vault)
+    expect(JSON.parse(out.replace(/^data: /, '').trim())).toEqual({ a: '⟨cx', b: ':1⟩' })
+  })
+
+  it('leaves a placeholder the vault does not hold', () => {
+    const out = restoreStream(`${ev({ t: '⟨cx:9⟩ and ⟨cx:1⟩' })}\n\n`, vault)
+    expect(said(out)).toBe('⟨cx:9⟩ and AKIA-ONE')
   })
 })

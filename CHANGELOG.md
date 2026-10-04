@@ -25,7 +25,20 @@ The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reprod
 - The proxy's own pages answered any web page the user had open: a text/plain POST
   put 99,999 fake events into the stats, and stats and the dashboard answered a foreign
   `Host`, which is what DNS rebinding sends. Both are refused.
-- A 400 KB gzip body was expanded to 400 MB. Decompression stops at the 5 MB scan cap.
+- A 400 KB gzip body was expanded to 400 MB. Decompression stops at the scan cap (32 MB).
+- Redact parsed the body and wrote it out again, which is not a faithful copy: `9007199254740993`
+  became `9007199254740992`, `1.10` became `1.1`, a repeated key was dropped. The edit is now made
+  on the text the client sent (a reader that agrees with `JSON.parse` on 80,000 random and mutated
+  documents), so a body with nothing to redact is forwarded byte for byte. A secret used as an
+  object key was never read; keys are scanned, blocked and redacted. A key that appears twice is
+  refused in Block mode: `JSON.parse` keeps the last, another parser keeps the first.
+- A 300 MB body took the proxy to 1,268 MB: it was read whole, with no limit. A body over 64 MB is
+  answered 413 without being forwarded (peak memory for the same 300 MB: 130 MB), and the scan cap
+  goes from 5 MB to 32 MB, so a 6 MB image request is no longer refused in Block mode. After a 413
+  the rest of the body is read and dropped (for at most 30 s), because on Windows and macOS the
+  client otherwise saw a reset instead of the answer.
+- An unreachable upstream was answered with `TypeError: fetch failed`; the reply now names the
+  upstream and the cause (`ECONNREFUSED`).
 
 **Engine**
 
@@ -50,6 +63,8 @@ The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reprod
 - `contextia scan .` skipped every dotfile but `.env`, so `.env.production`, `.env.local`
   and `.aws/credentials` were never read. Present in every release since 0.1.0. It reads
   them now, follows symlinks to files and reads a file reachable under two names once.
+- `contextia proxy` on a port that is taken crashed with `Unhandled error event`. It says the port
+  is in use (or not allowed) and exits 1.
 - A file over the engine's 1,000,000-character cap printed a warning and "0 secrets found",
   exit 0, and `redact` printed the tail in clear. It is scanned in windows now.
 - `scan --json` through a pipe stopped at 65,536 bytes (807,789 expected), so the JSON did not
@@ -64,6 +79,9 @@ The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reprod
 - The hook crashed open: a missing bundle, a prompt field that was not text, or a stdin it
   could not read sent the prompt anyway, because the host treats a crash as non-blocking.
   It blocks, with a reason, whenever it cannot scan.
+- The block could be lost: the hook called `process.exit()` right after writing, and on a pipe
+  written asynchronously the message never left the process and the prompt went through. It now
+  exits from the write callback.
 
 **Browser extension**
 
