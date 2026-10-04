@@ -24,7 +24,9 @@ const STYLE = `
 
 /* frosted-glass surface shared by the floating panels */
 .glass {
-  background: rgba(18,18,20,.66);
+  /* Nearly opaque on purpose: the panel sits on whatever page the user has open. At .66 a white
+     page turned it grey and the secondary text measured 1.6:1 (4.5:1 is the minimum). */
+  background: rgba(18,18,20,.96);
   -webkit-backdrop-filter: blur(16px) saturate(150%);
   backdrop-filter: blur(16px) saturate(150%);
   border: 1px solid rgba(255,255,255,.09);
@@ -41,7 +43,7 @@ const STYLE = `
 .cx-indicator:hover { transform: translateY(-1px); }
 .cx-indicator:active { transform: translateY(0); }
 .cx-indicator.cx-alert { color: ${DANGER}; border-color: rgba(255,93,95,.55); }
-.cx-indicator.cx-blocked { color: ${DANGER}; border-color: rgba(255,93,95,.7); background: rgba(40,20,21,.66); }
+.cx-indicator.cx-blocked { color: ${DANGER}; border-color: rgba(255,93,95,.7); background: rgba(40,20,21,.97); }
 .cx-mark { width: 15px; height: 15px; display: inline-flex; color: ${BRAND}; filter: drop-shadow(0 0 4px ${BRAND}66); transition: color .16s ${EASE}, filter .16s ${EASE}; }
 .cx-mark svg { width: 100%; height: 100%; display: block; }
 .cx-indicator.cx-alert .cx-mark, .cx-indicator.cx-blocked .cx-mark { color: ${DANGER}; filter: drop-shadow(0 0 4px ${DANGER}66); }
@@ -104,7 +106,7 @@ const STYLE = `
 .cx-banner {
   position: fixed; left: 50%; bottom: 58px; z-index: 2147483647;
   display:flex; align-items:center; gap:12px; color:#ffd9da;
-  background: rgba(40,20,21,.72); border:1px solid rgba(255,93,95,.6); border-radius:12px;
+  background: rgba(40,20,21,.97); border:1px solid rgba(255,93,95,.6); border-radius:12px;
   padding:9px 13px; font:600 12px/1 ${FONT};
   -webkit-backdrop-filter: blur(16px) saturate(150%); backdrop-filter: blur(16px) saturate(150%);
   box-shadow: 0 10px 32px rgba(0,0,0,.5);
@@ -140,20 +142,53 @@ export class Hud {
 
     this.overlay = el('div', 'cx-overlay')
     this.indicator = el('div', 'cx-indicator glass')
+    // A div that opens a panel is invisible to the keyboard and to a screen reader unless it
+    // says it is a button and can take focus.
+    this.indicator.setAttribute('role', 'button')
+    this.indicator.tabIndex = 0
+    this.indicator.setAttribute('aria-haspopup', 'dialog')
+    this.indicator.setAttribute('aria-expanded', 'false')
+    this.indicator.setAttribute('aria-label', 'Contextia: no secrets detected')
     const mark = el('span', 'cx-mark')
     mark.replaceChildren(markNode())
     this.label = el('span', '', 'Contextia')
     this.countEl = el('span', 'cx-count')
     this.indicator.append(mark, this.label, this.countEl)
     this.indicator.addEventListener('click', () => this.setOpen(!this.open))
+    this.indicator.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        e.stopPropagation() // the page's own Enter handling must not see this one
+        this.setOpen(!this.open)
+      } else if (e.key === 'Escape' && this.open) {
+        e.stopPropagation()
+        this.setOpen(false)
+      }
+    })
 
     this.popover = el('div', 'cx-pop glass')
+    this.popover.setAttribute('role', 'dialog')
+    this.popover.setAttribute('aria-label', 'Detected secrets')
+    this.popover.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        this.setOpen(false)
+        this.indicator.focus()
+      }
+    })
     this.tooltip = el('div', 'cx-tip glass')
     this.tooltip.addEventListener('mouseenter', () => this.cancelTip())
     this.tooltip.addEventListener('mouseleave', () => this.scheduleTipHide())
     this.banner = el('div', 'cx-banner')
+    // A blocked send is shown for a few seconds; this is how it reaches someone who cannot see it.
+    this.banner.setAttribute('role', 'alert')
 
-    this.root.append(this.overlay, this.indicator, this.popover, this.tooltip, this.banner)
+    // One landmark for everything the extension puts on the page, so it is not loose content
+    const region = el('div', 'cx-region')
+    region.setAttribute('role', 'region')
+    region.setAttribute('aria-label', 'Contextia')
+    region.append(this.overlay, this.indicator, this.popover, this.tooltip, this.banner)
+    this.root.append(region)
     document.body.appendChild(this.host)
   }
 
@@ -170,6 +205,16 @@ export class Hud {
     this.indicator.classList.toggle('cx-blocked', blocked)
     this.label.textContent = blocked ? '🔒 Blocked' : truncated && !has ? 'Too long to check' : 'Contextia'
     this.countEl.textContent = has ? String(findings.length) : truncated ? '?' : ''
+    this.indicator.setAttribute(
+      'aria-label',
+      blocked
+        ? `Contextia: send blocked, ${findings.length} secret${findings.length === 1 ? '' : 's'} to resolve`
+        : has
+          ? `Contextia: ${findings.length} secret${findings.length === 1 ? '' : 's'} detected`
+          : truncated
+            ? 'Contextia: this message is too long to check'
+            : 'Contextia: no secrets detected',
+    )
     this.indicator.title = truncated
       ? 'This message is longer than Contextia can scan. The end of it was not checked for secrets.'
       : ''
@@ -200,6 +245,7 @@ export class Hud {
   private setOpen(open: boolean): void {
     this.open = open
     this.popover.classList.toggle('cx-on', open)
+    this.indicator.setAttribute('aria-expanded', String(open))
   }
 
   private renderPopover(findings: Finding[]): void {

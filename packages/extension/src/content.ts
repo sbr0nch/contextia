@@ -179,7 +179,15 @@ function doRedact(action: LogAction): void {
 // The findings the handlers decide from come from a scan that runs 150 ms after
 // the last input. A send that lands inside that window used to be decided from
 // stale findings and went through. Rescan right now, before every decision.
+// An Enter pressed on Contextia's own indicator or on its "Redact all" button is not a send.
+// It was read as one: in Block mode it was stopped before the button saw it, so a keyboard
+// user could not resolve a block.
+function fromHud(e: Event): boolean {
+  return (e.composedPath?.() ?? []).some((n) => n instanceof Element && n.id === 'contextia-hud')
+}
+
 function decide(e: Event): boolean {
+  if (fromHud(e)) return false
   if (settings.mode === 'off') return false
   // composedPath()[0] sees through a shadow root, where e.target is the host
   scan(e.composedPath?.()[0] ?? e.target)

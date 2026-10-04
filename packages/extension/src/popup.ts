@@ -43,6 +43,8 @@ async function render(): Promise<void> {
   app.replaceChildren()
 
   const brand = el('div', 'cx-brand')
+  brand.setAttribute('role', 'heading') // the page's level-one heading, without changing how it looks
+  brand.setAttribute('aria-level', '1')
   const mark = el('span', 'cx-mark')
   mark.replaceChildren(markNode())
   brand.append(mark, el('span', '', 'Contextia'))
@@ -53,8 +55,11 @@ async function render(): Promise<void> {
   headline.append(num, document.createTextNode(` secrets caught · ${stats.allowed} allowed · ${stats.leaked} leaked`))
 
   const field = el('div', 'cx-field')
-  field.append(el('label', '', 'Mode'))
+  const modeLabel = el('label', '', 'Mode') as HTMLLabelElement
+  modeLabel.htmlFor = 'cx-mode'
+  field.append(modeLabel)
   const sel = document.createElement('select')
+  sel.id = 'cx-mode'
   ;(Object.keys(MODE_LABELS) as Mode[]).forEach((m) => {
     const o = document.createElement('option')
     o.value = m
