@@ -3,15 +3,18 @@ import type { Detector, RawMatch } from '../types.js'
 // `KEY=value` lines where the key name implies a secret and the value is
 // substantive. Scoping to secret-ish key names keeps false positives down.
 const RE =
-  /(?:^|\n)[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]*[ \t]*=[ \t]*['"]?([^\s'"#]{8,})['"]?/gi
+  /(?:^|\n)[ \t]*(?:export[ \t]+)?[A-Z0-9_]{0,64}(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]{0,64}[ \t]*=[ \t]*['"]?([^\s'"#]{8,})['"]?/gi
 
+// Both patterns bound the name around the keyword to 64 characters: unbounded, a run of
+// keyword-dense text with no `=` (`AUTHAUTHAUTH...`) was quadratic (3.3 s at 80 KB).
+//
 // The same assignment in the middle of a line: `OPENAI_API_KEY=sk-... python app.py`,
 // `docker run -e DB_PASSWORD=...`, or a sentence that quotes one. Here the key must be
 // upper case with no space around the `=`, which is how an environment variable is
 // written. Case-insensitive, it read `tokenType=\`PERCENTAGE\`` in minified code as a
 // secret (144 hits in 3,311 files of other people's code); upper case only, none.
 const INLINE =
-  /(?<![A-Za-z0-9_])[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]*=['"]?([^\s'"#]{8,})['"]?/g
+  /(?<![A-Za-z0-9_])[A-Z0-9_]{0,64}(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]{0,64}=['"]?([^\s'"#]{8,})['"]?/g
 
 // Brackets, braces, commas or semicolons inside a value taken from the middle of a line mean
 // the line is code (a minified bundle), not an environment assignment.

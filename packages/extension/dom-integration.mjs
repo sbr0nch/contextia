@@ -182,6 +182,49 @@ for (const id of ['prompt-textarea','edit']) document.getElementById(id).addEven
   return failed
 }
 
+// One form, two editors: a system prompt and the message box. A send carries both, so a secret in
+// either must stop it, whichever has the focus. The first editor in the form used to be the only one read.
+const FORM_EDITORS = [
+  { name: 'secret in the message box, focus on the button', secretIn: '#msg', focus: '#go', expectSent: 0 },
+  { name: 'secret in the system prompt, message box focused', secretIn: '#sys', focus: '#msg', expectSent: 0 },
+  { name: 'secret in the system prompt, nothing focused', secretIn: '#sys', focus: '#go', expectSent: 0 },
+  { name: 'nothing secret in either', secretIn: null, focus: '#go', expectSent: 1 },
+]
+async function formEditors(ctx, sw) {
+  let failed = 0
+  await sw.evaluate(() => chrome.storage.local.set({ settings: { mode: 'block' } }))
+  try {
+    for (const c of FORM_EDITORS) {
+      const pg = await ctx.newPage()
+      await pg.route('**/*', (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: 'text/html; charset=utf-8',
+          body: page(`<form id="f" onsubmit="event.preventDefault(); window.sent++"><textarea id="sys" style="width:500px;height:50px"></textarea><textarea id="msg" style="width:500px;height:50px"></textarea><button id="go" type="submit" aria-label="Send message">Send</button></form><script>window.sent=0</script>`),
+        }),
+      )
+      await pg.goto('https://claude.ai/', { waitUntil: 'domcontentloaded' })
+      await pg.waitForTimeout(700)
+      if (c.secretIn) {
+        await pg.focus(c.secretIn)
+        await pg.keyboard.insertText('token ' + GH)
+        await pg.waitForTimeout(400)
+      }
+      await pg.focus(c.focus)
+      await pg.click('#go')
+      await pg.waitForTimeout(300)
+      const sent = await pg.evaluate(() => window.sent)
+      const ok = sent === c.expectSent
+      if (!ok) failed++
+      console.log(`  ${ok ? 'ok  ' : 'FAIL'}  one form, two editors: ${c.name.padEnd(52)} reached the site ${sent} time(s), expected ${c.expectSent}`)
+      await pg.close()
+    }
+  } finally {
+    await sw.evaluate(() => chrome.storage.local.remove('settings'))
+  }
+  return failed
+}
+
 async function main() {
   if (!existsSync(DIST)) {
     console.error('build the extension first: npm run build --workspace @sbr0nch/contextia-extension')
@@ -193,6 +236,7 @@ async function main() {
   try {
     failed += await blockRace(ctx, sw) // first: the service worker is awake right after launch
     failed += await twoEditors(ctx, sw)
+    failed += await formEditors(ctx, sw)
     for (const c of CASES) {
       const pg = await ctx.newPage()
       await pg.route('**/*', (r) =>
@@ -218,7 +262,7 @@ async function main() {
     await close()
   }
 
-  console.log(failed ? `\n${failed} case(s) failed\n` : `\nall ${CASES.length + RACE_DELAYS.length + TWO_EDITORS.length} cases passed\n`)
+  console.log(failed ? `\n${failed} case(s) failed\n` : `\nall ${CASES.length + RACE_DELAYS.length + TWO_EDITORS.length + FORM_EDITORS.length} cases passed\n`)
   process.exit(failed ? 1 : 0)
 }
 

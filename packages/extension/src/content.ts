@@ -1,5 +1,5 @@
 import { detectDetailed, redact, customFindings, type Config, type Finding } from '@sbr0nch/contextia-engine'
-import { composerAt, findComposer, type Composer } from './composer.js'
+import { composerAt, composersFor, findComposer, type Composer } from './composer.js'
 import { Hud } from './ui.js'
 import { api } from './api.js'
 import { scoreSendButton, isSendTarget } from './send-button.js'
@@ -190,7 +190,13 @@ function decide(e: Event): boolean {
   if (fromHud(e)) return false
   if (settings.mode === 'off') return false
   // composedPath()[0] sees through a shadow root, where e.target is the host
-  scan(e.composedPath?.()[0] ?? e.target)
+  const origin = e.composedPath?.()[0] ?? e.target
+  // a form can carry several editors (a system prompt and a message box): judge each one
+  for (const c of composersFor(origin)) {
+    scan(c.el)
+    if (needsAttention({ findings, truncated: scanTruncated }, settings.mode)) return true
+  }
+  scan(origin)
   return needsAttention({ findings, truncated: scanTruncated }, settings.mode)
 }
 

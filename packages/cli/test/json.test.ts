@@ -184,3 +184,18 @@ describe('patchJson changes the named strings and nothing else', () => {
     expect(out).toBe('{"⟨redacted⟩":1,"b":2}')
   })
 })
+
+describe('patching many keys', () => {
+  it('stays linear: 60,000 rewritten keys in one body patch in well under a second', () => {
+    const n = 60_000
+    const text = '{' + Array.from({ length: n }, (_, i) => `"k${i}":1`).join(',') + '}'
+    const index = indexJson(text)!
+    const edits = new Map<number, string>(index.keys.map((k) => [k.start, 'x' + k.key] as const))
+    const t0 = Date.now()
+    const out = patchJson(text, index, new Map(), edits)
+    const ms = Date.now() - t0
+    expect(Object.keys(JSON.parse(out))).toHaveLength(n)
+    expect(JSON.parse(out).xk59999).toBe(1)
+    expect(ms).toBeLessThan(1500)
+  })
+})

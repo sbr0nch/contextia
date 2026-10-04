@@ -108,6 +108,22 @@ export function composerAt(target: EventTarget | null): Composer | null {
   return inForm && isEditable(inForm) ? makeComposer(inForm) : null
 }
 
+/**
+ * Every editor a send from this target would carry. The one the target sits in; or, for a send
+ * button or a submit, all the editors in its form (a form can hold a system prompt and a message
+ * box, and the secret may be in either). The focused one comes first. Empty when neither can be told.
+ */
+export function composersFor(target: EventTarget | null): Composer[] {
+  if (!(target instanceof Element)) return []
+  const own = target.closest<HTMLElement>(EDITABLE)
+  if (own && isEditable(own)) return [makeComposer(own)]
+  const form = target.closest('form')
+  if (!form) return []
+  const active = deepActiveElement()
+  const found = [...form.querySelectorAll<HTMLElement>(EDITABLE)].filter(isEditable).map(makeComposer)
+  return found.sort((a, b) => Number(b.el === active) - Number(a.el === active))
+}
+
 export function makeComposer(el: HTMLElement): Composer {
   const isTextarea = el instanceof HTMLTextAreaElement
   return {

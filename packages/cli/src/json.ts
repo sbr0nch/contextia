@@ -30,6 +30,8 @@ export interface JsonIndex {
   strings: Map<string, StringToken>
   /** Every object key, in document order. */
   keys: KeyToken[]
+  /** Every string value, in document order, including the ones a repeated key shadows. */
+  all: StringToken[]
   /** True when some object has the same key twice: JSON.parse keeps the last, others the first. */
   duplicateKeys: boolean
 }
@@ -48,6 +50,7 @@ class Reader {
   pos = 0
   readonly strings = new Map<string, StringToken>()
   readonly keys: KeyToken[] = []
+  readonly all: StringToken[] = []
   duplicateKeys = false
 
   constructor(readonly text: string) {}
@@ -73,6 +76,7 @@ class Reader {
     if (c === 34) {
       const tok = this.string()
       this.strings.set(path, tok)
+      this.all.push(tok)
       return
     }
     if (c === 45 || (c >= 48 && c <= 57)) return this.number()
@@ -185,7 +189,19 @@ export function indexJson(text: string): JsonIndex | null {
     if (e instanceof SyntaxError) return null
     throw e
   }
-  return { strings: r.strings, keys: r.keys, duplicateKeys: r.duplicateKeys }
+  return { strings: r.strings, keys: r.keys, all: r.all, duplicateKeys: r.duplicateKeys }
+}
+
+/** The text with the given ranges replaced by `JSON.stringify` of their new content; ranges must not overlap. */
+export function patchSpans(text: string, spans: ReadonlyArray<readonly [number, number, string]>): string {
+  const sorted = [...spans].sort((a, b) => a[0] - b[0])
+  let out = ''
+  let at = 0
+  for (const [s, e, value] of sorted) {
+    out += text.slice(at, s) + JSON.stringify(value)
+    at = e
+  }
+  return out + text.slice(at)
 }
 
 /**
@@ -194,21 +210,17 @@ export function indexJson(text: string): JsonIndex | null {
  * named is copied as it was.
  */
 export function patchJson(text: string, index: JsonIndex, values: ReadonlyMap<string, string>, keys: ReadonlyMap<number, string> = new Map()): string {
-  const edits: Array<[number, number, string]> = []
+  const spans: Array<[number, number, string]> = []
   for (const [path, value] of values) {
     const tok = index.strings.get(path)
-    if (tok) edits.push([tok.start, tok.end, JSON.stringify(value)])
+    if (tok) spans.push([tok.start, tok.end, value])
   }
-  for (const [start, value] of keys) {
-    const tok = index.keys.find((k) => k.start === start)
-    if (tok) edits.push([tok.start, tok.end, JSON.stringify(value)])
+  if (keys.size) {
+    const byStart = new Map(index.keys.map((k) => [k.start, k] as const))
+    for (const [start, value] of keys) {
+      const tok = byStart.get(start)
+      if (tok) spans.push([tok.start, tok.end, value])
+    }
   }
-  edits.sort((a, b) => a[0] - b[0])
-  let out = ''
-  let at = 0
-  for (const [s, e, replacement] of edits) {
-    out += text.slice(at, s) + replacement
-    at = e
-  }
-  return out + text.slice(at)
+  return patchSpans(text, spans)
 }

@@ -9,7 +9,7 @@ import {
   type CustomRules,
 } from '@sbr0nch/contextia-engine'
 import { detectAll } from './core.js'
-import { childPath, indexJson, patchJson, type JsonIndex } from './json.js'
+import { childPath, indexJson, patchJson, patchSpans, type JsonIndex } from './json.js'
 
 export type ProxyMode = 'warn' | 'redact' | 'block'
 export type { CustomRules }
@@ -58,7 +58,6 @@ const unscannableDetail = (limit: number): Record<UnscannableReason, string> => 
   oversize: `larger than the ${mb(limit)} scan cap`,
   encoding: `unsupported content-encoding, or larger than the ${mb(limit)} scan cap once decompressed`,
   unparsable: 'not JSON we understand',
-  ambiguous: 'a key appears twice, and parsers disagree about which value counts',
 })
 
 /** A secret-free browser catch, reported to the local dashboard. Counts only. */
@@ -282,6 +281,49 @@ export function processPayload(
 }
 
 /**
+ * The scan used when an object repeats a key. `JSON.parse` keeps the last value and another
+ * parser the first, so which one the upstream reads is not known: every string of the text is
+ * scanned, the shadowed ones included, and nothing is exempt. Redaction is applied by position.
+ */
+export function processEveryString(
+  text: string,
+  index: JsonIndex,
+  mode: ProxyMode,
+  config: Config,
+  custom?: CustomRules,
+  vault?: Map<string, string>,
+): { findings: Finding[]; spans: Array<[number, number, string]> } {
+  const findings: Finding[] = []
+  const spans: Array<[number, number, string]> = []
+  for (const tok of index.all) {
+    const value = JSON.parse(text.slice(tok.start, tok.end)) as string
+    const found = [...detectAll(value, config), ...(custom ? customFindings(value, custom) : [])]
+    if (!found.length) continue
+    findings.push(...found)
+    if (mode === 'redact') {
+      spans.push([
+        tok.start,
+        tok.end,
+        redact(
+          value,
+          found,
+          vault
+            ? {
+                token: (f) => {
+                  const t = `⟨cx:${vault.size + 1}⟩`
+                  vault.set(t, f.match)
+                  return t
+                },
+              }
+            : undefined,
+        ),
+      ])
+    }
+  }
+  return { findings, spans }
+}
+
+/**
  * The object keys of a body. A key is a string a client can put anything in, and the walk
  * above reads values only: a secret used as a key (`{"AKIA...": 1}`) went upstream unseen.
  * Each distinct key is scanned once; a body repeats the same few ("role", "content").
@@ -452,7 +494,7 @@ export const DEFAULT_MAX_BODY = 64 * 1024 * 1024
 const MAX_EVENTS_BODY = 1024 * 1024
 
 /** Why a body could not be inspected. Null means it was scanned normally. */
-export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable' | 'ambiguous'
+export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable'
 
 /**
  * Decode a request body for scanning. Returns null when the encoding is one we
@@ -637,10 +679,11 @@ async function handle(
           // not JSON
         }
         if (index === null) unscannable = 'unparsable'
-        else if (index.duplicateKeys) unscannable = 'ambiguous'
         if (!unscannable && index !== null) {
           const edits = new Map<string, string>()
-          const findings = processPayload(json, opts.mode, config, opts.custom, vault, opts.signature, edits)
+          // With a repeated key the parsed object shows one value of the two; scan all of them
+          const every = index.duplicateKeys ? processEveryString(text, index, opts.mode, config, opts.custom, vault) : null
+          const findings = every ? every.findings : processPayload(json, opts.mode, config, opts.custom, vault, opts.signature, edits)
           const keys = processKeys(index, opts.mode, config, opts.custom, vault)
           findings.push(...keys.findings)
           if (findings.length > 0) {
@@ -666,7 +709,13 @@ async function handle(
               // The edits are applied to the text the client sent, so numbers, spacing and
               // key order arrive as they were. The result is plain JSON: forward it decoded
               // and drop the stale content-encoding rather than re-compressing.
-              body = Buffer.from(patchJson(text, index, edits, keys.edits))
+              if (every) {
+                const byStart = new Map(index.keys.map((k) => [k.start, k] as const))
+                const keySpans = [...keys.edits].map(([start, v]) => [start, byStart.get(start)!.end, v] as [number, number, string])
+                body = Buffer.from(patchSpans(text, [...every.spans, ...keySpans]))
+              } else {
+                body = Buffer.from(patchJson(text, index, edits, keys.edits))
+              }
               dropContentEncoding = true
             }
           }

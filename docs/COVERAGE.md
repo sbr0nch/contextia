@@ -50,7 +50,7 @@ Peso = misura fatta prima di correggere. Ogni correzione ha la sua legge, vista 
 | D7 | CLI | `contextia scna .` stampava l'help ed usciva 0; `--port abc` stack trace | exit 2 con messaggio | `test:docs` |
 | D10 | build | `verify` falliva su clone pulito | build del motore prima di typecheck/test; `test:clean` | CI + `test:clean` |
 | D17 | CLI (regressione mia, trovata dal revisore) | finestre con 64 KB di sovrapposizione: chiave piu' lunga persa, token a cavallo riportato due volte | vedi D5 | `core.test.ts` (griglia di posizioni, indipendente dalle costanti) |
-| D18 | proxy redact | il corpo passava per parse e stringify: `9007199254740993` diventava `...992`, `1.10` diventava `1.1`, una chiave ripetuta spariva, un segreto in una chiave non era letto | lettore che registra dove sta ogni stringa e chiave; il redact e' fatto sul testo originale; chiave doppia rifiutata in Block | `json.test.ts` (80.000 documenti contro `JSON.parse`), `proxy-behaviour.test.ts` |
+| D18 | proxy redact | il corpo passava per parse e stringify: `9007199254740993` diventava `...992`, `1.10` diventava `1.1`, una chiave ripetuta spariva, un segreto in una chiave non era letto | lettore che registra dove sta ogni stringa e chiave; il redact e' fatto sul testo originale; ogni occorrenza di una chiave doppia e' scansionata, in ogni modo | `json.test.ts` (80.000 documenti contro `JSON.parse`), `proxy-behaviour.test.ts` |
 | D19 | proxy, memoria | un corpo da 300 MB portava il proxy a 1.268 MB (letto intero, senza tetto) | oltre 64 MB: 413 senza inoltro (picco 130 MB); tetto di scansione da 5 a 32 MB | `proxy-behaviour.test.ts` |
 | D21 | proxy, Windows e macOS | dopo un 413 il client vedeva ECONNRESET (Windows) o EPIPE (macOS) invece della risposta | il resto del corpo e' letto e scartato (al piu' 30 s) | CI `Platforms` |
 | D22 | CLI | una porta occupata: `Unhandled error event`; un upstream irraggiungibile: `TypeError: fetch failed` | messaggio con porta e motivo, exit 1; il 502 nomina upstream e causa | `process-faults.mjs` (15 casi, processi veri) |
@@ -62,6 +62,10 @@ Peso = misura fatta prima di correggere. Ogni correzione ha la sua legge, vista 
 | D28 | estensione, Firefox 157 | traccia di scorrimento bianca nella lista scura; il titolo del pannello addossato ai pulsanti (visti guardando le foto, non da un controllo) | `scrollbar-color`, pannello da 320 px | `test:firefox` (2 controlli) |
 | D29 | motore | `env_secret` vedeva `KEY=valore` solo a inizio riga: `OPENAI_API_KEY=sk-... python app.py` passava (32 casi su 3.015 nei contesti) | maiuscolo anche a meta' riga; `$VAR`, letterali regex e valori con `( ) { } , ;` non sono valori | `context.test.ts`, fixture |
 | D30 | proxy `--reversible` | un segnaposto spezzato su piu' eventi in streaming restava segnaposto | le stringhe di un campo sono unite in ordine prima del restauro | `proxy-reversible.test.ts` (3 formati, ogni posizione) |
+| D31 | proxy redact e warn (regressione mia, trovata dalla revisione indipendente) | una chiave ripetuta in un punto qualsiasi rendeva il corpo "ambiguo" e lo inoltrava senza scansione: in redact il segreto passava, mentre prima `JSON.parse` lo faceva redigere | ogni occorrenza di ogni stringa e' scansionata e redatta per posizione, in ogni modo | `proxy-behaviour.test.ts` (3 modi, segreto nell'occorrenza ombreggiata) |
+| D32 | proxy | `patchJson` cercava ogni chiave in una lista: 60.000 chiavi riscritte, 6,4 s sul ciclo di eventi | mappa per posizione | `json.test.ts` (1,5 s di tetto) |
+| D33 | motore | `env_secret` quadratico su testo denso di parole chiave senza `=` (`AUTHAUTH...`: 3,3 s a 80 KB, 23 s nella legge) | nome intorno alla parola chiave limitato a 64 caratteri | `hostile.test.ts` (3 forme nuove) |
+| D34 | estensione | un invio da un form con piu' editor (prompt di sistema e messaggio) era giudicato sul primo editor: un segreto nel secondo passava | si giudicano tutti gli editor del form | `test:dom` (4 casi, il primo rosso sul codice vecchio) |
 
 ## 3. Mappa
 
@@ -165,14 +169,18 @@ di cartella: D4 c'era dall'inizio. L'import del motore fallisce in tutte tranne 
 ## 5. Non risolto (dichiarato, non nascosto)
 
 Chiuso in questo lotto, e tolto da qui: il redact che riscriveva il JSON (D18), le chiavi
-doppie e i segreti nelle chiavi (D18), il corpo letto senza tetto (D19), il token
+doppie e i segreti nelle chiavi (D18, D31), il corpo letto senza tetto (D19), il token
 reversibile spezzato (D30, con un upstream finto), il secondo editor (D24).
 
 - **`--reversible` tiene la risposta fino alla fine** e poi la restaura: l'agente la riceve
   tutta insieme, non a pezzi. Il caso del segnaposto spezzato e' provato con un server
   finto in tre formati di flusso, **non** con un modello vero.
-- **Chiave doppia nel JSON**: rifiutata in Block; in redact e warn la richiesta viene
-  inoltrata con un avviso su stderr, perche' non si sa quale valore l'upstream leggera'.
+- **Flusso di risposta in `--reversible`**: un campo `data:` su piu' righe e un BOM prima del primo
+  evento non uniscono i pezzi (il segnaposto resta tale: non e' una fuga); i valori con virgolette
+  dentro un `input_json_delta` sono ripristinati con un solo livello di escape; `pieceAt` e'
+  lineare per segnaposto (lento solo con migliaia di segnaposto in un flusso lungo).
+- **Hook**: se `block()` stesso lancia (stdout chiuso) dentro il `.catch`, l'uscita e' 1, non
+  bloccante. Caso limite non corretto.
 - **Costo di molte stringhe piccole**: 100.000 stringhe da 2 caratteri (500 KB) bloccano
   il proxy per 2,1 s. Un corpo da 32 MB puo' tenerlo occupato molti secondi.
 - **Il contenuto di un blocco `thinking`** (firmato) non e' letto ne' riscritto.
@@ -215,7 +223,7 @@ e' una risposta valida.
 |---|---|---|---|
 | **CEO / owner** | giallo | la 2.1.0 e' pubblicata su GitHub e dice cosa e' stato corretto; il proxy non perde piu' il segreto in nessuna delle 13 forme misurate. Ma il tag `v2.1.0` punta a un commit in cui ogni `package.json` dice ancora 2.0.4, e su npm c'e' la 2.0.3 | decidere il numero del prossimo rilascio e pubblicare npm, Chrome Web Store e AMO; non pubblicare i numeri sul sito prima |
 | **CTO / architetto** | giallo | zero dipendenze a runtime; 1 solo autore; `proxy.ts` e' il punto singolo di guasto per chi lo usa; `--reversible` trattiene la risposta fino alla fine; il mutation testing ora gira ogni settimana in una copia con TypeScript 5 (`scripts/mutation.mjs`); vitest 5 chiude l'audit ma chiede Node >= 22.12, mentre il prodotto dichiara Node >= 20 | scegliere se alzare il minimo a Node 22 (Node 20 e' fuori supporto da aprile 2026): sblocca vitest 5 e la PR dependabot; un secondo manutentore |
-| **CISO / sicurezza** | giallo | superficie locale chiusa (D11, D12); guardiano che fallisce chiuso e consegna il blocco anche su pipe asincrona (D8, D23); il proxy legge ogni stringa, le chiavi, e rifiuta una chiave doppia in Block (D2, D18); tetti di memoria (D19). Aperti: sezione 5 (blocchi `thinking` non letti, 2,1 s con 100.000 stringhe piccole, match oltre 250.000 caratteri). SECURITY.md ha un canale privato; nessun advisory pubblicato per D2 (non verificato) | decisione sulle voci di sezione 5; un advisory per D2 |
+| **CISO / sicurezza** | giallo | superficie locale chiusa (D11, D12); guardiano che fallisce chiuso e consegna il blocco anche su pipe asincrona (D8, D23); il proxy legge ogni stringa, le chiavi, e scansiona ogni occorrenza di una chiave doppia (D2, D18, D31); tetti di memoria (D19). Aperti: sezione 5 (blocchi `thinking` non letti, 2,1 s con 100.000 stringhe piccole, match oltre 250.000 caratteri). SECURITY.md ha un canale privato; nessun advisory pubblicato per D2 (non verificato) | decisione sulle voci di sezione 5; un advisory per D2 |
 | **Prodotto / UX** | giallo | accessibilita' misurata con axe e tastiera (19 controlli), 18 schermate in stati diversi, e viste in un Firefox vero, dove sono emersi due difetti visivi che Chromium non mostrava (D28). **Non provato**: una persona vera al primo uso, i siti veri con il loro CSS | prova con una persona; l'indicatore sopra le pagine vere |
 | **QA** | verde con riserva | 3.981 test + 119 casi di processo, nessuno saltato; ogni legge nuova vista rossa (anche i controlli di Firefox, sabotando il codice); browser: Chromium 141, Chrome for Testing 154 e Firefox 157 in locale, Chromium e Firefox del runner in CI; sistemi: Linux, Windows, macOS in CI; punteggio di mutazione: motore, proxy, core, lettore JSON ed estensione (vedi sezione 4). Riserva: `cli.ts`, `content.ts`, `ui.ts`, `options.ts`, `popup.ts` non muovono con Stryker | nulla di misurato che manchi, a parte la riserva |
 | **Ops / SRE** | giallo | installazione pulita 19 s; CI verde su Linux, Windows e macOS, Node 20 e 22; job settimanali (Platforms, Mutation); nessuno stato lato server; rollback = pubblicare una versione nuova. **Non provati**: SIGTERM e SIGINT su Windows, memoria su Windows | provare Ctrl+C reale su Windows |
@@ -252,7 +260,8 @@ Ordine:
 
 1. **Rileggere questa PR** nelle parti a rischio: `proxy.ts` (`restoreStream`, `readBody`),
    `json.ts`, `env-secret.ts`, `content.ts`/`composer.ts`/`ui.ts`. Un revisore indipendente in
-   sola lettura le ha gia' guardate (esito nella descrizione della PR).
+   sola lettura le ha gia' guardate: ha trovato 4 difetti veri, tutti corretti con la loro
+   legge (D31 a D34), e 3 limiti bassi, dichiarati in sezione 5.
 2. **Fondere** quando la CI e' verde, **poi scegliere il numero** (consiglio 2.1.1 se resta
    tutto un seguito della 2.1.0, 2.2.0 se conta il cambio di tetto e di `env_secret`) e
    aggiornare insieme le sei posizioni: i tre `package.json`, `plugin.json`, `marketplace.json`,

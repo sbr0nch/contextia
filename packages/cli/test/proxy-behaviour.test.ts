@@ -495,16 +495,40 @@ describe('methods, size limits and refusals', () => {
     expect(t.calls[0]!.body).toBe(sent)
   })
 
-  it('a duplicate key is refused in block mode as unscannable, and counted unscanned elsewhere', async () => {
-    const dup = `{"messages":[{"role":"user","content":"k ${SECRET}"}],"messages":[]}`
+  it('a repeated key hides nothing: every occurrence is scanned, in every mode', async () => {
+    const K2 = 'AKIAABCDEFGHIJKLMNOP'
+    // the secret is in the occurrence JSON.parse drops (the first), in the one it keeps, and under a key that repeats in a nested object
+    const dup = `{"messages":[{"role":"user","content":"k ${SECRET}"}],"messages":[{"role":"user","content":"k ${K2}"}],"metadata":{"a":"x ${SECRET}","a":2}}`
     const blocked = await setup('block')
     const a = await blocked.get('/v1/messages', { method: 'POST', headers: JSON_H, body: dup })
     expect(a.status).toBe(403)
-    expect(JSON.parse(a.text).error).toMatchObject({ type: 'contextia_unscannable', reason: 'ambiguous' })
+    expect(JSON.parse(a.text).error).toMatchObject({ type: 'contextia_blocked' })
     expect(blocked.calls).toHaveLength(0)
+
+    const red = await setup('redact')
+    await red.get('/v1/messages', { method: 'POST', headers: JSON_H, body: dup })
+    const sent = red.calls[0]!.body
+    expect(sent).not.toContain(SECRET)
+    expect(sent).not.toContain(K2)
+    expect(sent).toContain('"metadata":{"a":"x ⟨redacted:aws_access_key_id⟩","a":2}')
+
     const warned = await setup('warn')
     await warned.get('/v1/messages', { method: 'POST', headers: JSON_H, body: dup })
-    expect(await warned.stats()).toMatchObject({ unscanned: 1 })
+    expect(await warned.stats()).toMatchObject({ withFindings: 1, unscanned: 0 })
+
+    const clean = `{"messages":[{"role":"user","content":"hello"}],"messages":[{"role":"user","content":"hi"}]}`
+    const ok = await setup('block')
+    expect((await ok.get('/v1/messages', { method: 'POST', headers: JSON_H, body: clean })).status).toBe(200)
+    expect(ok.calls[0]!.body).toBe(clean)
+  })
+
+  it('a repeated key and a secret used as a key, in one body, are both redacted and the body stays valid', async () => {
+    const body = `{"a":"x ${SECRET}","a":"y","${SECRET}":1}`
+    const red = await setup('redact')
+    await red.get('/v1/messages', { method: 'POST', headers: JSON_H, body })
+    const sent = red.calls[0]!.body
+    expect(sent).not.toContain(SECRET)
+    expect(sent).toBe('{"a":"x ⟨redacted:aws_access_key_id⟩","a":"y","⟨redacted:aws_access_key_id⟩":1}')
   })
 
   it('reads the keys: a secret used as an object key is found, blocked, and redacted', async () => {

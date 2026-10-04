@@ -282,8 +282,8 @@ var privateKey = {
 };
 
 // packages/engine/src/detectors/env-secret.ts
-var RE9 = /(?:^|\n)[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]*[ \t]*=[ \t]*['"]?([^\s'"#]{8,})['"]?/gi;
-var INLINE = /(?<![A-Za-z0-9_])[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]*=['"]?([^\s'"#]{8,})['"]?/g;
+var RE9 = /(?:^|\n)[ \t]*(?:export[ \t]+)?[A-Z0-9_]{0,64}(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]{0,64}[ \t]*=[ \t]*['"]?([^\s'"#]{8,})['"]?/gi;
+var INLINE = /(?<![A-Za-z0-9_])[A-Z0-9_]{0,64}(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]{0,64}=['"]?([^\s'"#]{8,})['"]?/g;
 var CODE_CHARS = /[(){}\[\],;]/;
 var PLACEHOLDER = /^\$[{(A-Za-z_]|^<|^your_|^changeme$|^x{3,}$|^\.{3,}$/i;
 var CODE_TAIL = /[;,)}\]]$/;
