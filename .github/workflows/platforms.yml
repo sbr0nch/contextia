@@ -33,6 +33,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+      # The steps after verify run even when it fails, so one push shows every difference
+      # between platforms and not only the first.
       - run: npm run test:docs
+        if: ${{ !cancelled() }}
       - run: npm run test:pack
+        if: ${{ !cancelled() }}
       - run: npm run test:proxy
+        if: ${{ !cancelled() }}

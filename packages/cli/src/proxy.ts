@@ -428,27 +428,41 @@ export function createProxyServer(opts: ProxyOptions): Server {
   return server
 }
 
-/** Read a request body, or return null after answering 413 when it passes `limit`. */
+/** Longest the proxy keeps reading and discarding what a client sends after a 413. */
+const DRAIN_MS = 30_000
+
+/**
+ * Read a request body, or return null after answering 413 when it passes `limit`.
+ *
+ * The rest of an oversized body is read and thrown away, not cut off. Closing the socket
+ * while the client is still sending makes the client see a reset (ECONNRESET on Windows,
+ * EPIPE on macOS) instead of the 413, found by running the tests there. Nothing is kept,
+ * so memory stays flat; the drain stops after DRAIN_MS.
+ */
 async function readBody(req: IncomingMessage, res: ServerResponse, limit: number): Promise<Buffer | null> {
   const chunks: Buffer[] = []
   let total = 0
   const declared = Number(req.headers['content-length'])
   if (Number.isFinite(declared) && declared > limit) total = declared
   if (total <= limit) {
-    for await (const c of req) {
+    // destroyOnReturn: false, so leaving the loop at the limit does not tear the stream down
+    for await (const c of req.iterator({ destroyOnReturn: false })) {
       total += (c as Buffer).length
       if (total > limit) break
       chunks.push(c as Buffer)
     }
   }
   if (total <= limit) return Buffer.concat(chunks)
-  res.writeHead(413, { 'content-type': 'application/json', connection: 'close' })
+  res.writeHead(413, { 'content-type': 'application/json' })
   res.end(
     JSON.stringify({
       error: { type: 'contextia_request_too_large', message: `Contextia does not read a request body over ${mb(limit)}; this one was larger.` },
     }),
   )
-  res.on('finish', () => req.destroy())
+  req.resume()
+  const stop = setTimeout(() => req.destroy(), DRAIN_MS)
+  stop.unref()
+  req.on('close', () => clearTimeout(stop))
   return null
 }
 
