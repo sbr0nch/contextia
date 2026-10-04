@@ -4,7 +4,6 @@
 // detection engine is bundled in ../vendor/engine.js, so this needs only Node,
 // no separately installed CLI, and nothing is sent anywhere.
 import { readFileSync } from 'node:fs'
-import { detectDetailed } from '../vendor/engine.js'
 
 function readStdin() {
   try {
@@ -27,44 +26,51 @@ function loadConfig() {
   }
 }
 
-const raw = readStdin()
-let prompt = raw
-try {
-  const payload = JSON.parse(raw)
-  // Fall back to the whole payload (which still contains the prompt) so a secret
-  // is never missed if the field name ever changes.
-  prompt = payload.prompt ?? payload.user_input ?? raw
-} catch {
-  // stdin wasn't JSON, so scan it as-is
-}
-
-const scan = detectDetailed(prompt, loadConfig())
-
-// A prompt too long to scan in full is unknown, not clean. This hook exists to
-// block, so it fails closed rather than waving through the part it never read.
-if (scan.truncated && scan.findings.length === 0) {
-  process.stdout.write(
-    JSON.stringify({
-      decision: 'block',
-      reason:
-        `Contextia blocked this prompt: it is ${prompt.length} characters and only the first ` +
-        `${scan.scannedLength} could be scanned, so the rest was never checked for secrets. ` +
-        `Send it in smaller pieces.`,
-    }),
-  )
+function block(reason) {
+  process.stdout.write(JSON.stringify({ decision: 'block', reason }))
   process.exit(0)
 }
 
-if (scan.findings.length === 0) process.exit(0)
+try {
+  // Loaded here, not at the top, so a missing or broken bundle is caught below
+  // instead of crashing the process: the host treats a crash as a non-blocking
+  // error and sends the prompt anyway.
+  const { detectDetailed } = await import('../vendor/engine.js')
 
-const types = [...new Set(scan.findings.map((f) => f.type))].join(', ')
-const tail = scan.truncated
-  ? ` (only the first ${scan.scannedLength} of ${prompt.length} characters could be scanned)`
-  : ''
-process.stdout.write(
-  JSON.stringify({
-    decision: 'block',
-    reason: `Contextia blocked this prompt: it contains ${types}${tail}. Remove the secret before sending; its value must not reach the model.`,
-  }),
-)
-process.exit(0)
+  const raw = readStdin()
+  let prompt = raw
+  try {
+    const payload = JSON.parse(raw)
+    // Scan the prompt field when it is text. If it is anything else, or absent,
+    // scan the whole payload (which still contains the prompt) so a secret is
+    // never missed because a field changed name or type.
+    prompt = typeof payload?.prompt === 'string' ? payload.prompt : typeof payload?.user_input === 'string' ? payload.user_input : raw
+  } catch {
+    // stdin wasn't JSON, so scan it as-is
+  }
+
+  const scan = detectDetailed(prompt, loadConfig())
+
+  // A prompt too long to scan in full is unknown, not clean. This hook exists to
+  // block, so it fails closed rather than waving through the part it never read.
+  if (scan.truncated && scan.findings.length === 0) {
+    block(
+      `Contextia blocked this prompt: it is ${prompt.length} characters and only the first ` +
+        `${scan.scannedLength} could be scanned, so the rest was never checked for secrets. ` +
+        `Send it in smaller pieces.`,
+    )
+  }
+
+  if (scan.findings.length === 0) process.exit(0)
+
+  const types = [...new Set(scan.findings.map((f) => f.type))].join(', ')
+  const tail = scan.truncated
+    ? ` (only the first ${scan.scannedLength} of ${prompt.length} characters could be scanned)`
+    : ''
+  block(`Contextia blocked this prompt: it contains ${types}${tail}. Remove the secret before sending; its value must not reach the model.`)
+} catch (err) {
+  block(
+    `Contextia could not scan this prompt (${err instanceof Error ? err.message : String(err)}), ` +
+      `so it was blocked rather than sent unchecked. Reinstall or update the plugin, or disable it to send.`,
+  )
+}
