@@ -283,9 +283,11 @@ var privateKey = {
 
 // packages/engine/src/detectors/env-secret.ts
 var RE9 = /(?:^|\n)[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]*[ \t]*=[ \t]*['"]?([^\s'"#]{8,})['"]?/gi;
-var PLACEHOLDER = /^\$[{(]|^<|^your_|^changeme$|^x{3,}$|^\.{3,}$/i;
+var INLINE = /(?<![A-Za-z0-9_])[A-Z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY|ENCRYPT(?:ION)?_?KEY|SIGN(?:ING)?_?KEY|MASTER_?KEY|SESSION_?KEY|AUTH|CREDENTIAL)[A-Z0-9_]*=['"]?([^\s'"#]{8,})['"]?/g;
+var PLACEHOLDER = /^\$[{(A-Za-z_]|^<|^your_|^changeme$|^x{3,}$|^\.{3,}$/i;
 var CODE_TAIL = /[;,)}\]]$/;
 var SECRET_SHAPE = /[0-9+/=]/;
+var REGEX_LITERAL = /^\/.+\/[a-z]*$/;
 var envSecret = {
   id: "env_secret",
   label: "Secret in KEY=value",
@@ -293,15 +295,22 @@ var envSecret = {
   defaultEnabled: true,
   scan(text) {
     const out = [];
-    for (const m of text.matchAll(RE9)) {
-      const value = m[1];
-      if (PLACEHOLDER.test(value)) continue;
-      if (CODE_TAIL.test(value)) continue;
-      if (!SECRET_SHAPE.test(value)) continue;
-      const start = m.index + m[0].lastIndexOf(value);
-      out.push({ start, end: start + value.length, match: value });
+    const seen = /* @__PURE__ */ new Set();
+    for (const re of [RE9, INLINE]) {
+      for (const m of text.matchAll(re)) {
+        const value = re === INLINE ? m[1].replace(/[.,;:)\]}]+$/, "") : m[1];
+        if (value.length < 8) continue;
+        if (PLACEHOLDER.test(value)) continue;
+        if (CODE_TAIL.test(value)) continue;
+        if (!SECRET_SHAPE.test(value)) continue;
+        if (REGEX_LITERAL.test(value)) continue;
+        const start = m.index + m[0].lastIndexOf(value);
+        if (seen.has(start)) continue;
+        seen.add(start);
+        out.push({ start, end: start + value.length, match: value });
+      }
     }
-    return out;
+    return out.sort((a, b) => a.start - b.start);
   },
   fixtures: {
     positives: [
@@ -309,7 +318,9 @@ var envSecret = {
       'export DB_PASSWORD="s3cr3tValue1"',
       "AUTH_TOKEN=abcd1234efgh5678",
       "ENCRYPTION_KEY=QEDirqDwyxx1T7jt3nDmSvDLNdLao=",
-      "SIGNING_KEY=abcd1234efgh5678"
+      "SIGNING_KEY=abcd1234efgh5678",
+      "OPENAI_API_KEY=sk-proj1234567890abcd python app.py"
+      // inline, before a command
     ],
     negatives: [
       "DEBUG=true",
@@ -322,8 +333,16 @@ var envSecret = {
       // an assignment in source, not an env line
       "tokenKind = IntTemplate",
       // a word, not secret material
-      "AUTH_MODE=interactive"
+      "AUTH_MODE=interactive",
       // a setting whose value is a plain word
+      "this.password=req.body.pass1word;",
+      // lower-case key in the middle of a line: code, not an env var
+      "TOKEN = /[A-Za-z0-9+/=_-]{20,}/g",
+      // a regular expression literal, not a value
+      "run with API_KEY=$KEY123456 set",
+      // a variable reference
+      "see (API_KEY=a1b2c3d...) in the docs"
+      // what is left once the sentence's punctuation is off is too short to be a value
     ]
   }
 };
