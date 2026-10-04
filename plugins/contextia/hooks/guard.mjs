@@ -5,12 +5,17 @@
 // no separately installed CLI, and nothing is sent anywhere.
 import { readFileSync } from 'node:fs'
 
-function readStdin() {
-  try {
-    return readFileSync(0, 'utf8')
-  } catch {
-    return ''
-  }
+// Reading can fail, and from inside the process some failures look like an empty stdin:
+// Node reopens a closed stdin as /dev/null, and a directory reads as nothing. The host
+// always sends a JSON payload, so no input at all means the prompt could not be read.
+// That is not the same as a clean prompt, so it is not swallowed: it reaches the guard
+// below, which blocks.
+async function readStdin() {
+  const chunks = []
+  for await (const chunk of process.stdin) chunks.push(chunk)
+  const text = Buffer.concat(chunks).toString('utf8')
+  if (text.trim() === '') throw new Error('no input was received on stdin')
+  return text
 }
 
 // Optional config injection: point CONTEXTIA_CONFIG at a JSON file to tune
@@ -37,7 +42,7 @@ try {
   // error and sends the prompt anyway.
   const { detectDetailed } = await import('../vendor/engine.js')
 
-  const raw = readStdin()
+  const raw = await readStdin()
   let prompt = raw
   try {
     const payload = JSON.parse(raw)

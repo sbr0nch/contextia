@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import type { AddressInfo } from 'node:net'
@@ -43,7 +43,7 @@ const SKIP_EXT = /\.(png|jpe?g|gif|webp|ico|svg|pdf|zip|gz|tgz|xz|7z|rar|mp[34]|
 // Dotfiles are read: `.env.production`, `.aws/credentials`, `.npmrc` and `.netrc`
 // are where secrets live. A symlink to a file is read; a symlink to a directory
 // is not followed, so a loop cannot trap the walk.
-function walk(dir: string, out: string[]): void {
+function walk(dir: string, out: string[], seen: Set<string> = new Set()): void {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, e.name)
     const dirLike = e.isDirectory()
@@ -56,8 +56,12 @@ function walk(dir: string, out: string[]): void {
       }
     }
     if (dirLike) {
-      if (!SKIP_DIRS.has(e.name)) walk(full, out)
+      if (!SKIP_DIRS.has(e.name)) walk(full, out, seen)
     } else if (fileLike && !SKIP_EXT.test(e.name)) {
+      // the same file under two names (a symlink inside the tree) is read once
+      const real = realpathSync(full)
+      if (seen.has(real)) continue
+      seen.add(real)
       out.push(full)
     }
   }
@@ -117,7 +121,9 @@ function cmdScan(): void {
   }
   if (json) process.stdout.write(JSON.stringify(rows, null, 2) + '\n')
   else process.stderr.write(`\n${total} secret${total === 1 ? '' : 's'} found\n`)
-  process.exit(total > 0 ? 1 : 0)
+  // Not process.exit(): stdout may be a pipe, which is written asynchronously, and
+  // exiting here cut a large --json output at 65,536 bytes. Let the stream drain.
+  process.exitCode = total > 0 ? 1 : 0
 }
 
 function cmdRedact(): void {

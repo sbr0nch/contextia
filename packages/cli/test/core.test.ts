@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detect } from '@sbr0nch/contextia-engine'
+import { detect, detectors } from '@sbr0nch/contextia-engine'
 import { configFor, lineCol, maskValue, locate, detectAll } from '../src/core.js'
 import { MAX_INPUT } from '@sbr0nch/contextia-engine'
 
@@ -67,9 +67,11 @@ describe('detectAll: a file longer than the engine cap is scanned to the end', (
     expect(text.slice(found[0]!.start, found[0]!.end)).toBe(KEY)
   })
 
-  // Window k covers [k * STEP, k * STEP + MAX_INPUT). These are the ends of the first three.
-  const STEP = MAX_INPUT - 65_536
-  const CUTS = [MAX_INPUT, STEP + MAX_INPUT, 2 * STEP + MAX_INPUT]
+  // Window k owns the matches that start in [k * STEP + HALF, k * STEP + HALF + STEP).
+  // These are the first three ownership boundaries, where one window hands over to the next.
+  const HALF = 250_000
+  const STEP = MAX_INPUT - 2 * HALF
+  const BOUNDARIES = [0, 1, 2].map((k) => k * STEP + MAX_INPUT - HALF)
 
   function withAt(total: number, pieces: Array<[number, string]>): string {
     const out: string[] = []
@@ -84,30 +86,52 @@ describe('detectAll: a file longer than the engine cap is scanned to the end', (
     return out.join('')
   }
 
-  it('finds a key that straddles each of the first three cuts, once each', () => {
-    for (const off of [-30, -10, -1]) {
-      const text = withAt(3_300_000, CUTS.map((c) => [c + off, ` ${KEY} `] as [number, string]))
+  it('finds a key at each ownership boundary and at each window edge, once each', () => {
+    const spots = [...new Set([...BOUNDARIES, STEP, MAX_INPUT, STEP + MAX_INPUT])].sort((a, b) => a - b)
+    for (const off of [-30, -10, -1, 0, 1]) {
+      const text = withAt(3_300_000, spots.map((c) => [c + off, ` ${KEY} `] as [number, string]))
       const found = detectAll(text, {}).filter((f) => f.type === 'aws_access_key_id')
-      expect(found.map((f) => text.slice(f.start, f.end)), `offset ${off}`).toEqual([KEY, KEY, KEY])
-      expect(new Set(found.map((f) => f.start)).size).toBe(3)
+      expect(found, `offset ${off}`).toHaveLength(spots.length)
+      for (const f of found) expect(text.slice(f.start, f.end)).toBe(KEY)
+      expect(new Set(found.map((f) => f.start)).size).toBe(spots.length)
     }
   })
 
-  it('does not report a variable-length value twice when the cut shortens it', () => {
+  it('does not report a variable-length value twice, or cut short, wherever it sits', () => {
     const value = 'Zk3' + 'q9Xv7'.repeat(14) // 73 characters, no placeholder shape
-    for (const off of [-60, -30, -10]) {
-      const text = withAt(1_500_000, [[MAX_INPUT + off, `\nAPI_KEY=${value}\n`]])
+    for (const at of [STEP - 40, STEP, STEP + 40, BOUNDARIES[0]! - 40, BOUNDARIES[0]!, MAX_INPUT - 40, MAX_INPUT]) {
+      const text = withAt(1_500_000, [[at, `\nAPI_KEY=${value}\n`]])
       const found = detectAll(text, {}).filter((f) => f.type === 'env_secret')
-      expect(found.map((f) => f.match), `offset ${off}`).toEqual([value])
+      expect(found.map((f) => f.match), `at ${at}`).toEqual([value])
     }
   })
 
-  it('finds a private key that straddles the first cut, whole, once', () => {
-    for (const off of [-1400, -755, -100]) {
-      const text = withAt(1_200_000, [[MAX_INPUT + off, ` ${PEM} `]])
+  // The same token must give the same findings wherever in a large file it sits.
+  it('reports a high-entropy token the same way at every position, including across a window start', () => {
+    let seed = 7
+    const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-'
+    const token = Array.from({ length: 80 }, () => abc[(seed = (seed * 1664525 + 1013904223) % 4294967296) % 64]).join('')
+    const line = `API_SECRET=${token}\n`
+    const all = { enabledDetectors: detectors.map((d) => d.id) }
+    const norm = (text: string) => detectAll(text, all).map((f) => `${f.type}:${text.slice(f.start, f.end)}`).sort()
+    const reference = norm(withAt(1_200_000, [[100_000, line]]))
+    expect(reference.length).toBeGreaterThanOrEqual(1)
+    for (const at of [STEP - 80, STEP - 40, STEP, STEP + 40, BOUNDARIES[0]! - 40, BOUNDARIES[0]!, MAX_INPUT - 40, MAX_INPUT]) {
+      expect(norm(withAt(1_200_000, [[at, line]])), `at ${at}`).toEqual(reference)
+    }
+  })
+
+  // The contract, not the implementation: a private key of up to 200,000 characters is
+  // found whole, once, wherever in a large file it starts. The grid steps across every
+  // window edge and ownership boundary of any reasonable window size.
+  it('finds a 200,000-character private key, whole and once, at every position of a 2.2 MB file', () => {
+    const body = 'MIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX'.repeat(Math.ceil(200_000 / 36))
+    const pem = `-----BEGIN RSA PRIVATE KEY-----\n${body}\n-----END RSA PRIVATE KEY-----`
+    for (let at = 0; at + pem.length + 2 < 2_200_000; at += 83_000) {
+      const text = withAt(2_200_000, [[at, ` ${pem} `]])
       const found = detectAll(text, {}).filter((f) => f.type === 'private_key')
-      expect(found, `offset ${off}`).toHaveLength(1)
-      expect(found[0]!.match).toBe(PEM)
+      expect(found, `at ${at}`).toHaveLength(1)
+      expect(found[0]!.match).toBe(pem)
     }
   })
 

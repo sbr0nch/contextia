@@ -28,6 +28,8 @@ const SHAPES: Record<string, (n: number) => string> = {
   'jwt-like dots': (n) => 'eyJ' + 'a.'.repeat(n / 2),
   'ip-like': (n) => '10.0.0.'.repeat(n / 7),
   'host-like': (n) => 'a.internal'.repeat(n / 10),
+  'hyphenated 63-char labels': (n) => ('a-'.repeat(31) + 'a.').repeat(n / 64),
+  'thirty-char labels': (n) => ('a'.repeat(30) + '.').repeat(n / 31),
   'repeated KEY=': (n) => 'API_KEY='.repeat(n / 8),
   'long upper line, many lines': (n) => ('\n' + 'A'.repeat(999)).repeat(n / 1000),
   'BEGIN PRIVATE, no END': (n) => '-----BEGIN PRIVATE KEY-----\n'.repeat(n / 28),
@@ -79,7 +81,8 @@ describe('no detector is superlinear on hostile input', () => {
 })
 
 describe('the whole engine on a 1 MB hostile input', () => {
-  for (const name of ['dotted labels', 'digit-dash runs', 'BEGIN PRIVATE, no END', 'jwt-like dots', 'host-like']) {
+  // Linear growth is not enough: 63-character labels were linear and still took 20 s per MB.
+  for (const name of ['dotted labels', 'digit-dash runs', 'BEGIN PRIVATE, no END', 'jwt-like dots', 'host-like', 'hyphenated 63-char labels', 'thirty-char labels']) {
     it(`${name} finishes in under 3 s with every detector on`, () => {
       const text = SHAPES[name]!(1_000_000)
       const all = { enabledDetectors: detectors.map((d) => d.id) }

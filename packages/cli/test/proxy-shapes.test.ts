@@ -62,12 +62,22 @@ describe('every request shape is scanned and redacted', () => {
 })
 
 describe('what must NOT be rewritten', () => {
-  it('leaves a thinking block alone: rewriting it breaks the signature the API checks', () => {
+  it('leaves the signed fields of a thinking block alone: rewriting them makes the API reject the request', () => {
     const body = {
       messages: [{ role: 'assistant', content: [{ type: 'thinking', thinking: `k ${SECRET}`, signature: 'sig-' + 'A'.repeat(40) }] }],
     }
     expect(processPayload(body, 'redact', configFor())).toHaveLength(0)
     expect(JSON.stringify(body)).toContain(SECRET)
+  })
+
+  it('but reads every other string of an object that merely says it is a thinking block', () => {
+    for (const body of [
+      { messages: [{ role: 'user', type: 'thinking', content: `key ${SECRET}` }] },
+      { messages: [{ role: 'assistant', content: [{ type: 'thinking', thinking: 'k', signature: 's', extra: `key ${SECRET}` }] }] },
+    ]) {
+      expect(processPayload(body, 'redact', configFor())).toHaveLength(1)
+      expect(JSON.stringify(body)).not.toContain(SECRET)
+    }
   })
 
   it('leaves base64 media alone: rewriting it corrupts the image', () => {
@@ -80,12 +90,35 @@ describe('what must NOT be rewritten', () => {
           content: [
             { type: 'image', source: { type: 'base64', media_type: 'image/png', data: png } },
             { type: 'image_url', image_url: { url: `data:image/png;base64,${png}` } },
+            { inline_data: { mime_type: 'image/png', data: png } }, // Gemini
+            { type: 'input_audio', input_audio: { data: png, format: 'wav' } }, // OpenAI
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: png } },
           ],
         },
       ],
     }
     expect(processPayload(body, 'redact', configFor())).toHaveLength(0)
-    expect(JSON.stringify(body)).toContain(png)
+    expect(JSON.stringify(body).split(png).length - 1).toBe(5)
+  })
+
+  it('reads text that only looks like it is in a media field', () => {
+    const cases: unknown[] = [
+      // a plain-text document: Anthropic puts the text itself in source.data
+      { messages: [{ role: 'user', content: [{ type: 'document', source: { type: 'text', media_type: 'text/plain', data: `file: ${SECRET}` } }] }] },
+      // a data: prefix says nothing about what follows it
+      { messages: [{ role: 'user', content: `data:x;base64,\nsecret ${SECRET}` }] },
+      { messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: `data:image/png;base64,AAAA ${SECRET}` } }] }] },
+      // base64-shaped, but nothing says it is media: could be anything an agent put there
+      { messages: [{ role: 'user', content: [{ type: 'tool_use', id: 'i', name: 'n', input: { data: 'A'.repeat(150) + '/' + SECRET + '/' + 'A'.repeat(150) } }] }] },
+      // says it is an image, but is far too short to be one
+      { messages: [{ role: 'user', content: [{ inline_data: { mime_type: 'image/png', data: `/${SECRET}/` } }] }] },
+      // a field called data that is not base64
+      { messages: [{ role: 'user', content: [{ type: 'tool_use', id: 'i', name: 'n', input: { data: `k ${SECRET}`, format: 'txt' } }] }] },
+    ]
+    for (const body of cases) {
+      expect(processPayload(body, 'redact', configFor()), JSON.stringify(body)).toHaveLength(1)
+      expect(JSON.stringify(body)).not.toContain(SECRET)
+    }
   })
 
   it('does not scan object keys or non-strings', () => {

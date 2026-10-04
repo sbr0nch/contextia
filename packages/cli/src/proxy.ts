@@ -1,7 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http'
 import { gunzipSync, inflateSync, brotliDecompressSync } from 'node:zlib'
 import {
-  detectDetailed,
   redact,
   customFindings,
   detectors,
@@ -9,6 +8,7 @@ import {
   type Finding,
   type CustomRules,
 } from '@sbr0nch/contextia-engine'
+import { detectAll } from './core.js'
 
 export type ProxyMode = 'warn' | 'redact' | 'block'
 export type { CustomRules }
@@ -51,7 +51,6 @@ const UNSCANNABLE_DETAIL: Record<UnscannableReason, string> = {
   oversize: 'larger than the 5 MB scan cap',
   encoding: 'unsupported content-encoding, or larger than the 5 MB scan cap once decompressed',
   unparsable: 'not JSON we understand',
-  truncated: 'longer than the engine scan cap, so the tail was not read',
 }
 
 /** A secret-free browser catch, reported to the local dashboard. Counts only. */
@@ -151,16 +150,28 @@ const slotSet = (s: Slot, v: string): void => {
   ;(s.container as Record<string | number, unknown>)[s.key] = v
 }
 
-// Strings that are not text and must come back byte for byte. A thinking block
-// is signed: rewriting it makes the API reject the whole request. Base64 media
-// is not prose: rewriting it corrupts the image.
-const BASE64_URL = /^data:[^,]{0,100};base64,/i
+// Strings that are not text and must come back byte for byte. The signed parts of a
+// thinking block: rewriting them makes the API reject the request. Base64 media:
+// rewriting it corrupts the image, and random base64 trips detectors now and then.
+//
+// Each rule is narrow on purpose. Whatever it exempts is never scanned, so a rule
+// that is too wide is a hole: a plain-text document puts its text in the same
+// `source.data` an image puts base64 in, and a `data:` prefix says nothing about
+// the rest of the string.
+// Real base64 has no spaces (only the line breaks of MIME wrapping) and media is long,
+// so a short string, or one with a space in it, is text and is read.
+const BASE64_BODY = /^[A-Za-z0-9+/_=\r\n-]{128,}$/
+const BASE64_URL = /^data:[^,]{0,100};base64,[A-Za-z0-9+/_=\r\n-]{128,}$/i
+const MEDIA_TYPE = /^(image|audio|video)\/|^application\/pdf$/i
 function isOpaque(container: unknown, key: string | number, value: string): boolean {
   if (BASE64_URL.test(value)) return true
   if (!container || typeof container !== 'object' || Array.isArray(container)) return false
   const o = container as Record<string, unknown>
-  if (o['type'] === 'thinking' || o['type'] === 'redacted_thinking') return true
-  return key === 'data' && typeof o['media_type'] === 'string'
+  if (o['type'] === 'thinking') return key === 'thinking' || key === 'signature'
+  if (o['type'] === 'redacted_thinking') return key === 'data'
+  if (key !== 'data' || !BASE64_BODY.test(value)) return false
+  const mime = o['media_type'] ?? o['mime_type']
+  return o['type'] === 'base64' || (typeof mime === 'string' && MEDIA_TYPE.test(mime)) || typeof o['format'] === 'string'
 }
 
 // Where conversational text lives. Read first and in this order, so the
@@ -227,16 +238,13 @@ export function processPayload(
   custom?: CustomRules,
   vault?: Map<string, string>,
   signature?: boolean,
-  /** Set to true when any node exceeded the engine scan cap, so part went unread. */
-  meta?: { truncated: boolean },
 ): Finding[] {
   const findings: Finding[] = []
   let noted = false
   for (const node of textNodes(body)) {
     const text = node.get()
-    const scan = detectDetailed(text, config)
-    if (scan.truncated && meta) meta.truncated = true
-    const found = [...scan.findings, ...(custom ? customFindings(text, custom) : [])]
+    // Windowed, so one long text (a file an agent read) is scanned to the end
+    const found = [...detectAll(text, config), ...(custom ? customFindings(text, custom) : [])]
     if (found.length) {
       findings.push(...found)
       if (mode === 'redact') {
@@ -301,7 +309,7 @@ const SKIP_REQUEST_HEADERS = new Set([
 const MAX_SCAN_BODY = 5 * 1024 * 1024 // larger bodies cannot be scanned in one pass
 
 /** Why a body could not be inspected. Null means it was scanned normally. */
-export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable' | 'truncated'
+export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable'
 
 /**
  * Decode a request body for scanning. Returns null when the encoding is one we
@@ -424,7 +432,9 @@ async function handle(
   let dropContentEncoding = false
   let unscannable: UnscannableReason | null = null
 
-  if ((req.method === 'POST' || req.method === 'PUT') && body.length > 0) {
+  // Any method that carries a body. This was POST and PUT only: a PATCH or DELETE with
+  // a prompt in it went upstream unscanned and unreported.
+  if (req.method !== 'GET' && req.method !== 'HEAD' && body.length > 0) {
     if (body.length > MAX_SCAN_BODY) {
       unscannable = 'oversize'
     } else {
@@ -439,9 +449,7 @@ async function handle(
           unscannable = 'unparsable'
         }
         if (!unscannable) {
-          const meta = { truncated: false }
-          const findings = processPayload(json, opts.mode, config, opts.custom, vault, opts.signature, meta)
-          if (meta.truncated) unscannable = 'truncated'
+          const findings = processPayload(json, opts.mode, config, opts.custom, vault, opts.signature)
           if (findings.length > 0) {
             stats.withFindings++
             for (const f of findings) bump(stats.byType, f.type, 1)

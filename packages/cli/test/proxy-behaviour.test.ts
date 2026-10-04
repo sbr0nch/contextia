@@ -342,10 +342,15 @@ describe('methods, size limits and refusals', () => {
   const body = (content: string): string => JSON.stringify({ messages: [{ role: 'user', content }] })
   const JSON_H = { 'content-type': 'application/json' }
 
-  it('scans a PUT body like a POST body', async () => {
-    const t = await setup('redact')
-    await t.get('/v1/x', { method: 'PUT', headers: JSON_H, body: body(`k ${SECRET}`) })
-    expect(t.calls[0]!.body).not.toContain(SECRET)
+  it('scans the body of a POST, PUT, PATCH and DELETE alike, in redact and in block mode', async () => {
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      const r = await setup('redact')
+      await r.get('/v1/x', { method, headers: JSON_H, body: body(`k ${SECRET}`) })
+      expect(r.calls[0]!.body, method).not.toContain(SECRET)
+      const b = await setup('block')
+      expect((await b.get('/v1/x', { method, headers: JSON_H, body: body(`k ${SECRET}`) })).status, method).toBe(403)
+      expect(b.calls, method).toHaveLength(0)
+    }
   })
 
   it('forwards a GET with no body, and a request for its own pages needs no Host check on the API paths', async () => {
@@ -392,11 +397,20 @@ describe('methods, size limits and refusals', () => {
     expect(t.calls).toHaveLength(0)
   })
 
-  it('block: one text longer than the engine cap is refused as truncated', async () => {
-    const t = await setup('block')
-    const r = await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x '.repeat(600_000)) })
-    expect(r.status).toBe(403)
-    expect(JSON.parse(r.text).error.reason).toBe('truncated')
+  // A tool_result can be a whole file. The proxy used to refuse a text past the engine cap in
+  // block mode, and forward it with the tail unread in redact mode.
+  it('scans a text longer than the engine cap to the end: a secret in the tail is caught, a clean one passes', async () => {
+    const long = 'x '.repeat(600_000)
+    const blocked = await setup('block')
+    const a = await blocked.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body(long + `\n${SECRET}\n`) })
+    expect(a.status).toBe(403)
+    expect(JSON.parse(a.text).error.type).toBe('contextia_blocked')
+    const clean = await blocked.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body(long) })
+    expect(clean.status).toBe(200)
+    const redacting = await setup('redact')
+    await redacting.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body(long + `\n${SECRET}\n`) })
+    expect(redacting.calls[0]!.body).not.toContain(SECRET)
+    expect(await redacting.stats()).toMatchObject({ unscanned: 0, redacted: 1 })
   })
 
   it('block: a body that is not JSON, and one whose encoding it cannot read, are refused with their reasons', async () => {
@@ -408,12 +422,11 @@ describe('methods, size limits and refusals', () => {
     expect(await t.stats()).toMatchObject({ blocked: 2 })
   })
 
-  it('warn: forwards an oversize, a truncated and an unreadable body, and counts each as unscanned', async () => {
+  it('warn: forwards an oversize and an unreadable body, and counts each as unscanned', async () => {
     const t = await setup('warn')
     await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x'.repeat(5 * 1024 * 1024 + 10)) })
-    await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x '.repeat(600_000)) })
     await t.get('/v1/messages', { method: 'POST', headers: { ...JSON_H, 'content-encoding': 'zstd' }, body: 'x' })
-    expect(t.calls).toHaveLength(3)
-    expect(await t.stats()).toMatchObject({ unscanned: 3, blocked: 0 })
+    expect(t.calls).toHaveLength(2)
+    expect(await t.stats()).toMatchObject({ unscanned: 2, blocked: 0 })
   })
 })

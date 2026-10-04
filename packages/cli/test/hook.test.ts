@@ -21,6 +21,45 @@ function run(stdin: string, opts: { root?: string; env?: Record<string, string> 
 }
 const blocked = (out: string): boolean => (out ? (JSON.parse(out) as { decision?: string }).decision === 'block' : false)
 
+describe('plugin hook, when the prompt cannot be read', () => {
+  // readStdin used to swallow every error and return '', which scans clean: a prompt
+  // the hook could not read was sent. These are the ways stdin fails.
+  const viaShell = (redirect: string) =>
+    spawnSync('sh', ['-c', `${JSON.stringify(process.execPath)} ${JSON.stringify(join(PLUGIN, 'hooks/guard.mjs'))} ${redirect}`], { encoding: 'utf8' })
+
+  it('blocks, with a reason, when stdin is closed', () => {
+    const r = viaShell('<&-')
+    expect(r.status).toBe(0)
+    expect(blocked(r.stdout)).toBe(true)
+    expect(r.stdout).toMatch(/could not scan/i)
+  })
+
+  it('blocks when stdin is a directory', () => {
+    expect(blocked(viaShell('< /tmp').stdout)).toBe(true)
+  })
+
+  it('blocks an empty stdin: no input at all means the prompt was not read, not that it was clean', () => {
+    for (const redirect of ['< /dev/null', '< /tmp']) {
+      const r = viaShell(redirect)
+      expect(r.status).toBe(0)
+      expect(blocked(r.stdout), redirect).toBe(true)
+    }
+    const spaces = spawnSync(process.execPath, [join(PLUGIN, 'hooks/guard.mjs')], { input: ' \n ', encoding: 'utf8' })
+    expect(blocked(spaces.stdout)).toBe(true)
+  })
+
+  it('does not block a payload whose prompt is the empty string', () => {
+    const r = spawnSync(process.execPath, [join(PLUGIN, 'hooks/guard.mjs')], { input: JSON.stringify({ prompt: '' }), encoding: 'utf8' })
+    expect(r.status).toBe(0)
+    expect(r.stdout).toBe('')
+  })
+
+  it('reads a prompt that arrives in several chunks, slowly', () => {
+    const r = spawnSync('sh', ['-c', `(printf '{"prompt":"k AKIA'; sleep 0.3; printf 'IOSFODNN7EXAMPLE"}') | ${JSON.stringify(process.execPath)} ${JSON.stringify(join(PLUGIN, 'hooks/guard.mjs'))}`], { encoding: 'utf8' })
+    expect(blocked(r.stdout)).toBe(true)
+  })
+})
+
 describe('plugin hook', () => {
   it('blocks a prompt with a secret, and says which type', () => {
     const r = run(JSON.stringify({ prompt: `key ${SECRET}` }))

@@ -131,6 +131,30 @@ try {
     }
   })
 
+  // `contextia scan . --json | jq` is the pipe a CI step uses. The scan exited with
+  // process.exit() straight after writing, and a pipe is written asynchronously, so
+  // the output stopped at the first 65,536 bytes: measured 65,536 of 807,789, and
+  // the JSON did not parse. The same run into a file was whole, which is why
+  // nothing noticed.
+  check('scan --json through a pipe is complete when the output is large', () => {
+    const many = mkdtempSync(join(tmpdir(), 'contextia-many-'))
+    try {
+      const FILES = 1500
+      for (let i = 0; i < FILES; i++) writeFileSync(join(many, `f${i}.env`), `k = "AKIAIOSFODNN7EXAMPLE"\nPASSWORD=Sup3rS3cretPass${i}\n`)
+      const r = run(['scan', '--json', '.'], { cwd: many }) // run() reads through a pipe
+      let rows
+      try {
+        rows = JSON.parse(r.stdout)
+      } catch (e) {
+        throw new Error(`the JSON stopped at ${r.stdout.length} bytes and does not parse`)
+      }
+      assert(rows.length === FILES * 2, `expected ${FILES * 2} rows, got ${rows.length}`)
+      assert(r.code === 1, `exit ${r.code}`)
+    } finally {
+      rmSync(many, { recursive: true, force: true })
+    }
+  })
+
   check('list names the detectors', () => {
     const r = run(['list'])
     assert(r.code === 0 && /aws_access_key_id/.test(r.stdout), 'roster missing')
@@ -162,12 +186,33 @@ try {
       writeFileSync(join(tree, '.env.local'), 'DB_PASSWORD=Sup3rS3cretPass\n')
       writeFileSync(join(tree, '.aws/credentials'), '[default]\naws_access_key_id = AKIAIOSFODNN7EXAMPLE\n')
       writeFileSync(join(tree, 'config/real.txt'), 'AKIAIOSFODNN7EXAMPLE\n')
-      symlinkSync(join(tree, 'config/real.txt'), join(tree, 'link.txt'))
+      const outside = mkdtempSync(join(tmpdir(), 'contextia-outside-'))
+      writeFileSync(join(outside, 'target.txt'), 'AKIAIOSFODNN7EXAMPLE\n')
+      symlinkSync(join(outside, 'target.txt'), join(tree, 'link.txt')) // a link to a file elsewhere
       const out = run(['scan', '.', '--json'], { cwd: tree }).stdout
+      rmSync(outside, { recursive: true, force: true })
       const files = new Set(JSON.parse(out).map((r) => r.file.replace(/^\.\//, '')))
       for (const f of ['.env.production', '.env.local', '.aws/credentials', 'config/real.txt', 'link.txt']) {
         assert(files.has(f), `scan . did not read ${f} (read: ${[...files].join(', ')})`)
       }
+    } finally {
+      rmSync(tree, { recursive: true, force: true })
+    }
+  })
+
+  // The same file under two names (a symlink inside the tree) used to be reported twice,
+  // so "2 secrets found" for one secret.
+  check('a file reachable under two names is scanned and reported once', () => {
+    const tree = mkdtempSync(join(tmpdir(), 'contextia-twice-'))
+    try {
+      mkdirSync(join(tree, '.aws'))
+      writeFileSync(join(tree, '.aws/credentials'), 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE\n')
+      symlinkSync(join(tree, '.aws/credentials'), join(tree, 'creds-link'))
+      symlinkSync(join(tree, '.aws'), join(tree, 'dir-link')) // a link to a directory is not followed
+      symlinkSync(tree, join(tree, 'loop')) // and a loop cannot trap the walk
+      const rows = JSON.parse(run(['scan', '.', '--json'], { cwd: tree }).stdout)
+      const files = new Set(rows.map((r) => r.file))
+      assert(files.size === 1, `one file was reported under ${files.size} names: ${[...files].join(', ')}`)
     } finally {
       rmSync(tree, { recursive: true, force: true })
     }

@@ -10,6 +10,8 @@ import { detectorsById } from '../src/detectors/index.js'
 const REFERENCE: Record<string, RegExp> = {
   email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
   db_connection_string: /\b[a-z][a-z0-9+.-]*:\/\/[^\s:@/]*:[^\s:@/]+@[^\s/]+/gi,
+  // the version that was bounded (DNS limits) but not yet atomic; same language on short text
+  internal_hostname: /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.){1,127}(?:internal|local|corp|lan|intranet)\b/gi,
   private_key:
     /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9]+ )?PRIVATE KEY-----/g,
 }
@@ -17,7 +19,7 @@ const REFERENCE: Record<string, RegExp> = {
 const FRAGMENTS = [
   '-----BEGIN PRIVATE KEY-----', '-----BEGIN RSA PRIVATE KEY-----', '-----END PRIVATE KEY-----',
   '-----END EC PRIVATE KEY-----', '-----BEGIN CERTIFICATE-----', '\n', '\r\n', ' ', 'MIIBOgIBAAJB', 'abc',
-  'john.doe', '@', 'example.com', 'x.y.internal', 'a-b.c.local', '.', '-', '_', '%', '+', 'EMAIL@HOST.ORG',
+  'john.doe', '@', 'example.com', 'x.y.internal', 'a-b.c.local', 'db01.corp', 'a.b..c.lan', '-a.local', 'a-.local', 'host.intranet', '.', '-', '_', '%', '+', 'EMAIL@HOST.ORG',
   'postgres://', 'u:p@h', 'mongodb+srv://', ':', '/', '"', "'", 'https://user:pw@host/db', 'http://', '1.2.3.4',
   'é', '😀',
 ]

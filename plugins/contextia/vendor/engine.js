@@ -442,7 +442,7 @@ var genericHighEntropy = {
 };
 
 // packages/engine/src/detectors/internal-hostname.ts
-var RE11 = /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.){1,127}(?:internal|local|corp|lan|intranet)\b/gi;
+var RE11 = /\b(?=[a-z0-9.-]{0,253}\.(?:internal|local|corp|lan|intranet)\b)(?:(?=[a-z0-9])(?=([a-z0-9-]{1,63}))\1(?<=[a-z0-9])\.){1,127}(?:internal|local|corp|lan|intranet)\b/gi;
 var internalHostname = {
   id: "internal_hostname",
   label: "Internal hostname",

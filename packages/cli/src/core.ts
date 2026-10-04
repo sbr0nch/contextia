@@ -34,32 +34,36 @@ export function maskValue(v: string): string {
   return `${v.slice(0, head)}…${v.slice(v.length - (shown - head))}`
 }
 
-// A match is never longer than this, so a window that overlaps the next by this
-// much sees every match that the cut splits, whole, in the next window.
-const OVERLAP = 65_536
+// A window owns the matches that start in its middle, and sees HALF characters on each
+// side of any of them. So every match up to HALF long is seen whole, with its left
+// context, by exactly one window: nothing is cut, nothing is counted twice. (The
+// first version overlapped windows by 65,536 and kept what each found: a private key
+// longer than that was missed, and a token that straddled a window start was reported
+// again from its tail.)
+const HALF = 250_000
 
 /**
  * Scan text of any length. The engine reads at most MAX_INPUT characters per
  * call, so a longer file is scanned in overlapping windows. The CLI used to scan
  * the first MAX_INPUT and report "0 secrets found" for a secret in the tail.
+ * A single match longer than 250,000 characters is not found.
  */
 export function detectAll(text: string, config: Config): Finding[] {
   if (text.length <= MAX_INPUT) return detect(text, config)
-  const found = new Map<string, Finding>()
-  for (let off = 0; ; off += MAX_INPUT - OVERLAP) {
-    const win = text.slice(off, off + MAX_INPUT)
+  const out: Finding[] = []
+  for (let off = 0; ; off += MAX_INPUT - 2 * HALF) {
     const last = off + MAX_INPUT >= text.length
-    for (const f of detect(win, config)) {
-      // A match touching the cut may be cut short; the next window has it whole.
-      if (!last && f.end === win.length) continue
+    const lo = off === 0 ? 0 : off + HALF
+    const hi = last ? Infinity : off + MAX_INPUT - HALF
+    for (const f of detect(text.slice(off, off + MAX_INPUT), config)) {
       const start = f.start + off
+      if (start < lo || start >= hi) continue
       const end = f.end + off
-      const id = `${f.type}:${start}:${end}`
-      if (!found.has(id)) found.set(id, { ...f, id, start, end })
+      out.push({ ...f, id: `${f.type}:${start}:${end}`, start, end })
     }
     if (last) break
   }
-  return [...found.values()].sort((a, b) => a.start - b.start || b.end - a.end || a.type.localeCompare(b.type))
+  return out.sort((a, b) => a.start - b.start || b.end - a.end || a.type.localeCompare(b.type))
 }
 
 export interface LocatedFinding extends Finding {
