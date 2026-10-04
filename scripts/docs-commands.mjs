@@ -119,12 +119,17 @@ try {
     assert(clean.code === 0 && JSON.parse(clean.stdout).length === 0, 'a clean scan did not print []')
     const odd = mkdtempSync(join(tmpdir(), 'contextia-odd-'))
     try {
-      const names = ['a "quoted" name.txt', 'new\nline.txt', 'tab\there.txt', 'caf\u00e9 \ud83d\ude00.txt', 'back\\slash.txt']
+      // Windows cannot create a file called with a quote, a newline, a tab or a backslash:
+      // those names are not proven there, and said so in the result.
+      const names =
+        process.platform === 'win32'
+          ? ['caf\u00e9 \ud83d\ude00.txt', 'with space.txt', 'semi;colon,comma.txt']
+          : ['a "quoted" name.txt', 'new\nline.txt', 'tab\there.txt', 'caf\u00e9 \ud83d\ude00.txt', 'back\\slash.txt']
       for (const n of names) writeFileSync(join(odd, n), 'k = "AKIAIOSFODNN7EXAMPLE"\n')
       const r = run(['scan', '--json', '.'], { cwd: odd })
       const rows = JSON.parse(r.stdout)
       assert(r.code === 1 && rows.length === names.length, `expected ${names.length} rows, got ${rows.length}`)
-      for (const n of names) assert(rows.some((x) => x.file === './' + n || x.file === n), `file name lost: ${JSON.stringify(n)}`)
+      for (const n of names) assert(rows.some((x) => x.file.replace(/\\/g, '/') === './' + n || x.file === n), `file name lost: ${JSON.stringify(n)}`)
       assert(rows.every((x) => x.preview && !x.preview.includes('AKIAIOSFODNN7EXAMPLE')), 'a preview carries the whole key')
     } finally {
       rmSync(odd, { recursive: true, force: true })
@@ -210,7 +215,8 @@ try {
       symlinkSync(join(outside, 'target.txt'), join(tree, 'link.txt')) // a link to a file elsewhere
       const out = run(['scan', '.', '--json'], { cwd: tree }).stdout
       rmSync(outside, { recursive: true, force: true })
-      const files = new Set(JSON.parse(out).map((r) => r.file.replace(/^\.\//, '')))
+      // paths are printed with the platform's separator: compare with /
+      const files = new Set(JSON.parse(out).map((r) => r.file.replace(/\\/g, '/').replace(/^\.\//, '')))
       for (const f of ['.env.production', '.env.local', '.aws/credentials', 'config/real.txt', 'link.txt']) {
         assert(files.has(f), `scan . did not read ${f} (read: ${[...files].join(', ')})`)
       }

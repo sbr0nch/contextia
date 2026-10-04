@@ -24,8 +24,12 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const results = []
 const record = (ok, name, detail = '') => results.push([ok, name, detail])
 
+// npm is npm.cmd on Windows, which Node will not spawn without a shell. When run through
+// `npm run` the real entry point is in npm_execpath: run it with node, the same everywhere.
 const npm = (args, cwd) =>
-  execFileSync('npm', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  process.env.npm_execpath
+    ? execFileSync(process.execPath, [process.env.npm_execpath, ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    : execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell: process.platform === 'win32' })
 
 const box = mkdtempSync(join(tmpdir(), 'contextia-pack-'))
 try {
