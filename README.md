@@ -49,11 +49,15 @@ that agent puts the reply: a terminal scrollback, a log file, a file it edits.
 The vault is per-request, so a model can only ever get back a value that was in
 that same request, but on this path the secret does reach your disk again.
 Leave it off if what you want is for the value never to reappear at all.
+In a streamed reply, a token that arrives split across two chunks may not be
+restored; this has not been measured against a real model yet.
 
-Works with any agent that lets you set its API base URL: **Claude Code, Cursor,
-Windsurf, aider, or your own API scripts**. Either use `contextia run -- <agent>`
-(it wires everything up), or point the agent's base URL at the proxy manually
-(env var, or the app's model/API settings for Cursor and Windsurf).
+Works with any agent that lets you set its API base URL. The proxy is tested
+with clients that speak the Anthropic, OpenAI (chat and responses) and Gemini
+request formats, and through `contextia run`. Claude Code, Cursor, Windsurf and
+aider are expected to work wherever they accept a base URL override, but they
+have not been run against it here. Either use `contextia run -- <agent>` (it
+wires everything up), or point the agent's base URL at the proxy manually.
 
 ## Browser extension
 
@@ -84,7 +88,7 @@ Hooks can't rewrite text, so this **blocks**. For redaction use the proxy
 
 ## What it detects
 
-50+ credential types: AWS, GitHub, GitLab, Stripe, Slack, OpenAI, Anthropic,
+83 detectors (`contextia list` prints them): AWS, GitHub, GitLab, Stripe, Slack, OpenAI, Anthropic,
 Google, Azure, Twilio, SendGrid, Figma, Atlassian, Terraform Cloud, Dropbox and
 more, plus PEM private keys, `.env` secrets, database connection strings, JWTs,
 and personal data like Luhn-valid credit-card numbers and IBANs. Add your own
