@@ -1,5 +1,77 @@
 # Changelog
 
+## Unreleased
+
+Found by running every surface the way a user does, with planted secrets and hostile
+input, and by comparing with a second tool. Every fix has a test that fails without it.
+The measurements are in `docs/COVERAGE.md`; `node scripts/benchmarks.mjs` reproduces them.
+
+**Proxy**
+
+- **A secret reached the upstream untouched in 9 of 13 request shapes**, with nothing on
+  stderr: a `tool_result` (where the file an agent just read comes back), tool call
+  arguments, the OpenAI Responses and legacy completions shapes, Gemini. The proxy read
+  only `system` and `messages[].content` text. It now reads every string a request
+  carries. Signed `thinking` fields and base64 media are left byte for byte.
+- PATCH and DELETE bodies are scanned (it was POST and PUT). A text longer than the
+  engine cap is scanned to the end instead of being refused in block mode or forwarded
+  with its tail unread in redact mode.
+- `--reversible` returned an invalid reply when the secret held a newline, a quote or a
+  backslash (a PEM key, a connection string): both the JSON and the SSE answer stopped
+  parsing. The value now goes back JSON-escaped.
+- The proxy's own pages answered any web page the user had open: a text/plain POST
+  put 99,999 fake events into the stats, and stats and the dashboard answered a foreign
+  `Host`, which is what DNS rebinding sends. Both are refused.
+- A 400 KB gzip body was expanded to 400 MB. Decompression stops at the 5 MB scan cap.
+
+**Engine**
+
+- `email`, `internal_hostname` and `db_connection_string` were quadratic (6.4 s, 6.3 s and
+  3.7 s on 80 KB), and `private_key` took 11.7 s on 1 MB of repeated headers. On a
+  paste, a prompt or a request that froze the browser tab, the proxy or the hook. All
+  four are linear now and find what the regexes they replaced found, checked on 20,000
+  random inputs each and on 9,809 real files.
+- A token ending in `-` or `.` was not matched whole by 14 detectors (Discord, Telegram,
+  GitLab, SendGrid, Square, OpenAI project keys, PyPI, PlanetScale, Figma, Airtable,
+  Terraform Cloud, Flutterwave, Vault): about one token in 64.
+
+**CLI**
+
+- `contextia scan .` skipped every dotfile but `.env`, so `.env.production`, `.env.local`
+  and `.aws/credentials` were never read. Present in every release since 0.1.0. It reads
+  them now, follows symlinks to files and reads a file reachable under two names once.
+- A file over the engine's 1,000,000-character cap printed a warning and "0 secrets found",
+  exit 0, and `redact` printed the tail in clear. It is scanned in windows now.
+- `scan --json` through a pipe stopped at 65,536 bytes (807,789 expected), so the JSON did not
+  parse. Same run into a file was whole.
+- An unknown command (`contextia scna .`) printed the help and exited 0, which in a
+  pre-commit hook reads as clean. It exits 2. `--port abc` exits 2 with a message.
+- The preview of a match showed 8 characters of anything over 10, two thirds of a
+  12-character password. It shows at most a fifth. The browser extension had the same preview.
+
+**Claude Code plugin**
+
+- The hook crashed open: a missing bundle, a prompt field that was not text, or a stdin it
+  could not read sent the prompt anyway, because the host treats a crash as non-blocking.
+  It blocks, with a reason, whenever it cannot scan.
+
+**Browser extension**
+
+- In Block mode an Enter pressed within about 100 ms of the secret appearing went through:
+  the handlers decided from a scan that runs 150 ms after the last input. They rescan first.
+
+**Build**
+
+- `npm run verify` failed on a fresh clone, so CI was red on the last five pushes to `main`,
+  the 2.0.4 release included. The engine is built before typecheck and tests.
+  `npm run test:clean` runs clone, `npm ci`, `verify`.
+- `npm run test:pack` also fails when the committed plugin bundle is not what a build
+  produces.
+
+**Behaviour that changes**: exit 2 for an unknown command or bad port; shorter previews;
+the proxy blocks and redacts more requests than before; `internal_hostname` stops at the
+253 characters DNS allows.
+
 ## v2.0.4
 
 - Dev dependencies move to TypeScript 7, vitest 4, esbuild 0.28, and the current
