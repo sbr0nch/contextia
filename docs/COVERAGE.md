@@ -130,12 +130,18 @@ quindi "0 ms" e' il percorso veloce; i casi con `@` e `://` sono nella legge `ho
 
 | Modulo | Prima | Dopo |
 |---|---|---|
-| motore: `detect`, `redact`, `custom`, helper | 81,2% | 93,7% (i 12 che restano sono mutanti equivalenti) |
-| CLI: `proxy.ts` | 60,7% | 78,1% |
-| CLI: `core.ts` | 79,8% | 83,2% |
+| motore: `detect` | 81,2% (insieme) | 92,4% |
+| motore: `redact`, `custom`, `_util` | (insieme) | 94,1%, 92,9%, 95,7% (i rimasti sono mutanti equivalenti) |
+| CLI: `proxy.ts` | 60,7% | 75,8% (include il codice nuovo: `restoreStream`, lettura del corpo, scansione di ogni stringa) |
+| CLI: `core.ts` | 79,8% | 83,3% |
+| CLI: `json.ts` (nuovo) | n/a | 94,6% |
 | estensione: gate, storage, reporter, mask | 69,1% (insieme) | 100% (quattro moduli) |
 | estensione: `send-button.ts` | 75,6% | 86,7% |
 | estensione: `composer.ts` | 49,5% | invariato: logica DOM, coperta da `test:dom` che Stryker non conta |
+
+Misurati con `node scripts/mutation.mjs` (le soglie dello script stanno poco sotto questi valori;
+gira ogni settimana in CI). In `restoreStream` i rimasti sono equivalenti: guardie che ricadono
+sullo stesso percorso.
 
 Il motore aveva il 100% di copertura di righe e 36 modifiche su 191 che i test non notavano.
 
