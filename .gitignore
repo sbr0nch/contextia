@@ -43,3 +43,5 @@ Thumbs.db
 
 # Firefox build output
 dist-firefox/
+packages/extension/states-out/
+packages/extension/firefox-out/

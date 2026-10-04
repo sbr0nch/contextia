@@ -9,6 +9,7 @@ import {
   type CustomRules,
 } from '@sbr0nch/contextia-engine'
 import { detectAll } from './core.js'
+import { childPath, indexJson, patchJson, patchSpans, type JsonIndex } from './json.js'
 
 export type ProxyMode = 'warn' | 'redact' | 'block'
 export type { CustomRules }
@@ -22,6 +23,10 @@ export interface ProxyOptions {
   /** Interface to bind. Defaults to 127.0.0.1; anything else exposes the proxy. */
   host?: string | undefined
   upstream?: string | undefined
+  /** Largest request body that is read; above it the answer is 413. */
+  maxBodyBytes?: number | undefined
+  /** Largest body that is scanned; above it the body is unscannable. */
+  maxScanBytes?: number | undefined
   all?: boolean | undefined
   custom?: CustomRules | undefined
   reversible?: boolean | undefined
@@ -47,11 +52,13 @@ export interface ProxyStats {
   bySite: Record<string, number>
 }
 
-const UNSCANNABLE_DETAIL: Record<UnscannableReason, string> = {
-  oversize: 'larger than the 5 MB scan cap',
-  encoding: 'unsupported content-encoding, or larger than the 5 MB scan cap once decompressed',
+const mb = (n: number): string => `${Math.round((n / (1024 * 1024)) * 10) / 10} MB`
+
+const unscannableDetail = (limit: number): Record<UnscannableReason, string> => ({
+  oversize: `larger than the ${mb(limit)} scan cap`,
+  encoding: `unsupported content-encoding, or larger than the ${mb(limit)} scan cap once decompressed`,
   unparsable: 'not JSON we understand',
-}
+})
 
 /** A secret-free browser catch, reported to the local dashboard. Counts only. */
 export interface BrowserEvent {
@@ -141,6 +148,8 @@ interface TextNode {
   set(value: string): void
   /** Conversational text (system prompt, message text). Only this carries the signature note. */
   prose: boolean
+  /** Where it sits in the body, as json.ts indexes it: lets an edit be applied to the original text. */
+  path: string
 }
 
 type Slot = { container: Record<string, unknown> | unknown[]; key: string | number }
@@ -198,16 +207,16 @@ export function* textNodes(body: unknown): Generator<TextNode> {
     ? body.map((_, i) => i)
     : [...LEAD_KEYS.filter((k) => k in root), ...Object.keys(root).filter((k) => !lead.has(k))]
 
-  const stack: Array<{ container: Record<string, unknown> | unknown[]; key: string | number; prose: boolean }> = []
-  for (const k of [...order].reverse()) stack.push({ container: root, key: k, prose: k === 'system' || k === 'messages' })
+  const stack: Array<{ container: Record<string, unknown> | unknown[]; key: string | number; prose: boolean; path: string }> = []
+  for (const k of [...order].reverse()) stack.push({ container: root, key: k, prose: k === 'system' || k === 'messages', path: childPath('', k) })
 
   while (stack.length) {
-    const { container, key, prose } = stack.pop()!
+    const { container, key, prose, path } = stack.pop()!
     const value = (container as Record<string | number, unknown>)[key]
     if (typeof value === 'string') {
       if (isOpaque(container, key, value)) continue
       const slot: Slot = { container, key }
-      yield { get: () => slotGet(slot) as string, set: (v) => slotSet(slot, v), prose }
+      yield { get: () => slotGet(slot) as string, set: (v) => slotSet(slot, v), prose, path }
     } else if (value && typeof value === 'object') {
       // Prose stays prose only along the path system/messages -> content -> text.
       // A tool call's input or a tool result's content is data, not conversation.
@@ -216,7 +225,7 @@ export function* textNodes(body: unknown): Generator<TextNode> {
       const keys = Array.isArray(value) ? value.map((_, i) => i) : Object.keys(o)
       for (const k of [...keys].reverse()) {
         const childProse = prose && !dataBlock && (Array.isArray(value) || k === 'content' || k === 'text' || k === 'system')
-        stack.push({ container: value as Record<string, unknown>, key: k, prose: childProse })
+        stack.push({ container: value as Record<string, unknown>, key: k, prose: childProse, path: childPath(path, k) })
       }
     }
   }
@@ -238,6 +247,8 @@ export function processPayload(
   custom?: CustomRules,
   vault?: Map<string, string>,
   signature?: boolean,
+  /** Receives each rewritten string by path, so the edit can be applied to the original text. */
+  edits?: Map<string, string>,
 ): Finding[] {
   const findings: Finding[] = []
   let noted = false
@@ -262,10 +273,96 @@ export function processPayload(
           noted = true
         }
         node.set(out)
+        edits?.set(node.path, out)
       }
     }
   }
   return findings
+}
+
+/**
+ * The scan used when an object repeats a key. `JSON.parse` keeps the last value and another
+ * parser the first, so which one the upstream reads is not known: every string of the text is
+ * scanned, the shadowed ones included, and nothing is exempt. Redaction is applied by position.
+ */
+export function processEveryString(
+  text: string,
+  index: JsonIndex,
+  mode: ProxyMode,
+  config: Config,
+  custom?: CustomRules,
+  vault?: Map<string, string>,
+): { findings: Finding[]; spans: Array<[number, number, string]> } {
+  const findings: Finding[] = []
+  const spans: Array<[number, number, string]> = []
+  for (const tok of index.all) {
+    const value = JSON.parse(text.slice(tok.start, tok.end)) as string
+    const found = [...detectAll(value, config), ...(custom ? customFindings(value, custom) : [])]
+    if (!found.length) continue
+    findings.push(...found)
+    if (mode === 'redact') {
+      spans.push([
+        tok.start,
+        tok.end,
+        redact(
+          value,
+          found,
+          vault
+            ? {
+                token: (f) => {
+                  const t = `⟨cx:${vault.size + 1}⟩`
+                  vault.set(t, f.match)
+                  return t
+                },
+              }
+            : undefined,
+        ),
+      ])
+    }
+  }
+  return { findings, spans }
+}
+
+/**
+ * The object keys of a body. A key is a string a client can put anything in, and the walk
+ * above reads values only: a secret used as a key (`{"AKIA...": 1}`) went upstream unseen.
+ * Each distinct key is scanned once; a body repeats the same few ("role", "content").
+ */
+export function processKeys(
+  index: JsonIndex,
+  mode: ProxyMode,
+  config: Config,
+  custom?: CustomRules,
+  vault?: Map<string, string>,
+): { findings: Finding[]; edits: Map<number, string> } {
+  const findings: Finding[] = []
+  const edits = new Map<number, string>()
+  const verdict = new Map<string, string | null>() // key -> its redacted form, or null when clean
+  for (const tok of index.keys) {
+    let redacted = verdict.get(tok.key)
+    if (redacted === undefined) {
+      const found = [...detectAll(tok.key, config), ...(custom ? customFindings(tok.key, custom) : [])]
+      redacted = null
+      if (found.length) {
+        findings.push(...found)
+        redacted =
+          mode !== 'redact'
+            ? null
+            : vault
+              ? redact(tok.key, found, {
+                  token: (f) => {
+                    const t = `⟨cx:${vault.size + 1}⟩`
+                    vault.set(t, f.match)
+                    return t
+                  },
+                })
+              : redact(tok.key, found)
+      }
+      verdict.set(tok.key, redacted)
+    }
+    if (redacted !== null) edits.set(tok.start, redacted)
+  }
+  return { findings, edits }
 }
 
 /**
@@ -282,6 +379,94 @@ export function detokenize(text: string, vault: Map<string, string>, jsonEscaped
     out = out.split(token).join(value)
   }
   return out
+}
+
+/**
+ * Restore originals in a streamed (SSE) reply.
+ *
+ * A model streams its answer in small deltas and a placeholder is a few tokens long, so
+ * it can arrive cut across events. Each text delta is a string at the same place in its
+ * event, so the strings at one path are joined in order, the placeholders found in the
+ * joined text, and the value written where the placeholder began (the rest of the
+ * placeholder is removed from the deltas it was cut into). Events that need no change
+ * are left byte for byte; the value goes back JSON-escaped, so every event stays valid.
+ */
+export function restoreStream(input: string, vault: Map<string, string>): string {
+  // a byte order mark before the first event is not part of any line's text
+  const bom = input.startsWith('\uFEFF') ? '\uFEFF' : ''
+  const text = bom ? input.slice(1) : input
+  const lines = text.split('\n')
+  type Piece = { line: number; path: string; value: string }
+  const indexes = new Map<number, { payload: string; index: NonNullable<ReturnType<typeof indexJson>>; prefix: string }>()
+  const groups = new Map<string, Piece[]>()
+  lines.forEach((l, i) => {
+    const prefix = l.startsWith('data: ') ? 'data: ' : l.startsWith('data:') ? 'data:' : null
+    const payload = prefix === null ? '' : l.slice(prefix.length)
+    const index = prefix === null ? null : indexJson(payload)
+    if (!index || prefix === null) {
+      lines[i] = detokenize(l, vault, true) // not a JSON event: a whole placeholder in it is still restored
+      return
+    }
+    indexes.set(i, { payload, index, prefix })
+    for (const [path, tok] of index.strings) {
+      const raw = payload.slice(tok.start, tok.end)
+      const value = JSON.parse(raw) as string
+      const list = groups.get(path)
+      if (list) list.push({ line: i, path, value })
+      else groups.set(path, [{ line: i, path, value }])
+    }
+  })
+
+  const edits = new Map<number, Map<string, string>>()
+  for (const pieces of groups.values()) {
+    const joined = pieces.map((p) => p.value).join('')
+    const found = [...joined.matchAll(/⟨cx:\d+⟩/g)].filter((m) => vault.has(m[0]))
+    if (found.length === 0) continue
+    const starts: number[] = []
+    let at = 0
+    for (const p of pieces) {
+      starts.push(at)
+      at += p.value.length
+    }
+    const pieceAt = (pos: number): number => {
+      let k = pieces.length - 1
+      while (k > 0 && starts[k]! > pos) k--
+      return k
+    }
+    // the fragments of a tool call's input join into JSON text, so the value goes in escaped once more
+    const asText = pieces[0]!.path.endsWith('\u0000partial_json') ? (v: string) => JSON.stringify(v).slice(1, -1) : (v: string) => v
+    const out = pieces.map(() => '')
+    const keep = (from: number, to: number): void => {
+      // text that stays, assigned back to the piece each character came from
+      let pos = from
+      while (pos < to) {
+        const k = pieceAt(pos)
+        const end = Math.min(to, starts[k]! + pieces[k]!.value.length)
+        out[k] += joined.slice(pos, end)
+        pos = end
+      }
+    }
+    let cursor = 0
+    for (const m of found) {
+      const s0 = m.index!
+      keep(cursor, s0)
+      out[pieceAt(s0)] += asText(vault.get(m[0])!)
+      cursor = s0 + m[0].length
+    }
+    keep(cursor, joined.length)
+    pieces.forEach((p, k) => {
+      if (out[k] === p.value) return
+      let m = edits.get(p.line)
+      if (!m) edits.set(p.line, (m = new Map()))
+      m.set(p.path, out[k]!)
+    })
+  }
+
+  for (const [i, m] of edits) {
+    const { payload, index, prefix } = indexes.get(i)!
+    lines[i] = prefix + patchJson(payload, index, m)
+  }
+  return bom + lines.join('\n')
 }
 
 export function resolveUpstream(url: string, configured?: string): string {
@@ -306,7 +491,12 @@ const SKIP_REQUEST_HEADERS = new Set([
   'trailer',
   'proxy-connection',
 ])
-const MAX_SCAN_BODY = 5 * 1024 * 1024 // larger bodies cannot be scanned in one pass
+/** Larger bodies are forwarded unscanned (warn, redact) or refused (block). */
+export const DEFAULT_MAX_SCAN_BODY = 32 * 1024 * 1024
+/** Larger bodies are not read at all: the proxy answers 413. Memory is about four times the body. */
+export const DEFAULT_MAX_BODY = 64 * 1024 * 1024
+/** The events route takes a counts-only batch; a thousand events is about 100 KB. */
+const MAX_EVENTS_BODY = 1024 * 1024
 
 /** Why a body could not be inspected. Null means it was scanned normally. */
 export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable'
@@ -315,12 +505,12 @@ export type UnscannableReason = 'oversize' | 'encoding' | 'unparsable'
  * Decode a request body for scanning. Returns null when the encoding is one we
  * cannot read, which must never be silently treated as "no secrets".
  */
-export function decodeBody(body: Buffer, encoding?: string): Buffer | null {
+export function decodeBody(body: Buffer, encoding?: string, maxOutput: number = DEFAULT_MAX_SCAN_BODY): Buffer | null {
   const enc = (encoding ?? '').trim().toLowerCase()
   try {
     if (enc === '' || enc === 'identity') return body
     // Capped: a 400 KB gzip expands to 400 MB, and the proxy used to allocate all of it.
-    const cap = { maxOutputLength: MAX_SCAN_BODY }
+    const cap = { maxOutputLength: maxOutput }
     if (enc === 'gzip' || enc === 'x-gzip') return gunzipSync(body, cap)
     if (enc === 'deflate') return inflateSync(body, cap)
     if (enc === 'br') return brotliDecompressSync(body, cap)
@@ -368,6 +558,44 @@ export function createProxyServer(opts: ProxyOptions): Server {
   return server
 }
 
+/** Longest the proxy keeps reading and discarding what a client sends after a 413. */
+const DRAIN_MS = 30_000
+
+/**
+ * Read a request body, or return null after answering 413 when it passes `limit`.
+ *
+ * The rest of an oversized body is read and thrown away, not cut off. Closing the socket
+ * while the client is still sending makes the client see a reset (ECONNRESET on Windows,
+ * EPIPE on macOS) instead of the 413, found by running the tests there. Nothing is kept,
+ * so memory stays flat; the drain stops after DRAIN_MS.
+ */
+async function readBody(req: IncomingMessage, res: ServerResponse, limit: number): Promise<Buffer | null> {
+  const chunks: Buffer[] = []
+  let total = 0
+  const declared = Number(req.headers['content-length'])
+  if (Number.isFinite(declared) && declared > limit) total = declared
+  if (total <= limit) {
+    // destroyOnReturn: false, so leaving the loop at the limit does not tear the stream down
+    for await (const c of req.iterator({ destroyOnReturn: false })) {
+      total += (c as Buffer).length
+      if (total > limit) break
+      chunks.push(c as Buffer)
+    }
+  }
+  if (total <= limit) return Buffer.concat(chunks)
+  res.writeHead(413, { 'content-type': 'application/json' })
+  res.end(
+    JSON.stringify({
+      error: { type: 'contextia_request_too_large', message: `Contextia does not read a request body over ${mb(limit)}; this one was larger.` },
+    }),
+  )
+  req.resume()
+  const stop = setTimeout(() => req.destroy(), DRAIN_MS)
+  stop.unref()
+  req.on('close', () => clearTimeout(stop))
+  return null
+}
+
 async function handle(
   req: IncomingMessage,
   res: ServerResponse,
@@ -403,11 +631,11 @@ async function handle(
       res.end()
       return
     }
-    const chunks: Buffer[] = []
-    for await (const c of req) chunks.push(c as Buffer)
+    const raw = await readBody(req, res, MAX_EVENTS_BODY)
+    if (raw === null) return
     let events: BrowserEvent[] | null = null
     try {
-      events = parseEventBatch(JSON.parse(Buffer.concat(chunks).toString('utf8')))
+      events = parseEventBatch(JSON.parse(raw.toString('utf8')))
     } catch {
       events = null
     }
@@ -422,11 +650,12 @@ async function handle(
     return
   }
 
-  const chunks: Buffer[] = []
-  for await (const c of req) chunks.push(c as Buffer)
-  let body = Buffer.concat(chunks)
+  const read = await readBody(req, res, opts.maxBodyBytes ?? DEFAULT_MAX_BODY)
+  if (read === null) return
+  let body = read
   stats.requests++
 
+  const scanLimit = opts.maxScanBytes ?? DEFAULT_MAX_SCAN_BODY
   const vault = opts.reversible && opts.mode === 'redact' ? new Map<string, string>() : undefined
   const reqEncoding = req.headers['content-encoding']
   let dropContentEncoding = false
@@ -435,21 +664,33 @@ async function handle(
   // Any method that carries a body. This was POST and PUT only: a PATCH or DELETE with
   // a prompt in it went upstream unscanned and unreported.
   if (req.method !== 'GET' && req.method !== 'HEAD' && body.length > 0) {
-    if (body.length > MAX_SCAN_BODY) {
+    if (body.length > scanLimit) {
       unscannable = 'oversize'
     } else {
-      const decoded = decodeBody(body, Array.isArray(reqEncoding) ? reqEncoding[0] : reqEncoding)
+      const decoded = decodeBody(body, Array.isArray(reqEncoding) ? reqEncoding[0] : reqEncoding, scanLimit)
       if (decoded === null) {
         unscannable = 'encoding'
       } else {
+        const text = decoded.toString('utf8')
         let json: unknown
+        let index: JsonIndex | null = null
         try {
-          json = JSON.parse(decoded.toString('utf8'))
+          json = JSON.parse(text)
+          // The reader that records where each string sits must agree that this is JSON
+          // (it refuses only what is nested past 512 levels). If it does not, the body is
+          // not scanned as if it were.
+          index = indexJson(text)
         } catch {
-          unscannable = 'unparsable'
+          // not JSON
         }
-        if (!unscannable) {
-          const findings = processPayload(json, opts.mode, config, opts.custom, vault, opts.signature)
+        if (index === null) unscannable = 'unparsable'
+        if (!unscannable && index !== null) {
+          const edits = new Map<string, string>()
+          // With a repeated key the parsed object shows one value of the two; scan all of them
+          const every = index.duplicateKeys ? processEveryString(text, index, opts.mode, config, opts.custom, vault) : null
+          const findings = every ? every.findings : processPayload(json, opts.mode, config, opts.custom, vault, opts.signature, edits)
+          const keys = processKeys(index, opts.mode, config, opts.custom, vault)
+          findings.push(...keys.findings)
           if (findings.length > 0) {
             stats.withFindings++
             for (const f of findings) bump(stats.byType, f.type, 1)
@@ -470,9 +711,16 @@ async function handle(
             }
             if (opts.mode === 'redact') {
               stats.redacted++
-              // The rewritten body is plain JSON: forward it decoded and drop the
-              // stale content-encoding rather than re-compressing.
-              body = Buffer.from(JSON.stringify(json))
+              // The edits are applied to the text the client sent, so numbers, spacing and
+              // key order arrive as they were. The result is plain JSON: forward it decoded
+              // and drop the stale content-encoding rather than re-compressing.
+              if (every) {
+                const byStart = new Map(index.keys.map((k) => [k.start, k] as const))
+                const keySpans = [...keys.edits].map(([start, v]) => [start, byStart.get(start)!.end, v] as [number, number, string])
+                body = Buffer.from(patchSpans(text, [...every.spans, ...keySpans]))
+              } else {
+                body = Buffer.from(patchJson(text, index, edits, keys.edits))
+              }
               dropContentEncoding = true
             }
           }
@@ -484,7 +732,7 @@ async function handle(
   // A body we could not read is unknown, not clean. Block mode must fail closed,
   // otherwise its one promise is broken by anything gzipped or oversized.
   if (unscannable) {
-    const detail = UNSCANNABLE_DETAIL[unscannable]
+    const detail = unscannableDetail(scanLimit)[unscannable]
     if (opts.mode === 'block') {
       stats.blocked++
       process.stderr.write(`contextia: blocked an unscannable request body (${detail})\n`)
@@ -524,7 +772,10 @@ async function handle(
     upstreamRes = await fetch(upstream + path, init)
   } catch (e) {
     res.writeHead(502, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ error: { type: 'contextia_upstream_error', message: String(e) } }))
+    // fetch reports every network failure as "fetch failed"; the reason is on the cause
+    const cause = (e as { cause?: { code?: string; message?: string } }).cause
+    const why = cause?.code ?? cause?.message ?? String(e)
+    res.end(JSON.stringify({ error: { type: 'contextia_upstream_error', message: `Contextia could not reach the upstream ${upstream}: ${why}` } }))
     return
   }
 
@@ -536,8 +787,9 @@ async function handle(
   // Reversible mode: buffer the response and restore the originals so the LLM's
   // answer is usable. (Trades streaming for round-trip restoration.)
   if (vault && vault.size > 0) {
-    const jsonish = /json|event-stream/i.test(upstreamRes.headers.get('content-type') ?? '')
-    const restored = detokenize(await upstreamRes.text(), vault, jsonish)
+    const type = upstreamRes.headers.get('content-type') ?? ''
+    const body = await upstreamRes.text()
+    const restored = /event-stream/i.test(type) ? restoreStream(body, vault) : detokenize(body, vault, /json/i.test(type))
     res.writeHead(upstreamRes.status, outHeaders)
     res.end(restored)
     return

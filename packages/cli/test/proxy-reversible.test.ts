@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { createProxyServer, detokenize } from '../src/proxy.js'
+import { createProxyServer, detokenize, restoreStream } from '../src/proxy.js'
 
 // --reversible restores the original value inside the model's reply. The reply
 // is JSON (or SSE lines of JSON), and the token sits inside a JSON string. A
@@ -81,5 +81,218 @@ describe('detokenize', () => {
   it('restores raw by default', () => expect(detokenize('x ⟨cx:1⟩ y', vault)).toBe('x a"b\\c\nd y'))
   it('restores JSON-escaped when asked, so it can sit inside a JSON string', () => {
     expect(JSON.parse(`"${detokenize('⟨cx:1⟩', vault, true)}"`)).toBe('a"b\\c\nd')
+  })
+})
+
+// The README says a model can only ever get back a value that was in that same request.
+// A reply that carries a placeholder from some other request, whether the model guessed
+// it or an earlier request left it behind, must stay a placeholder.
+describe('--reversible never restores a value from another request', () => {
+  it('leaves a placeholder alone when this request had no secret of its own', async () => {
+    const upPort = await listen(echo('json'))
+    const proxy = createProxyServer({ port: 0, mode: 'redact', reversible: true, signature: false, upstream: `http://localhost:${upPort}` })
+    const port = await listen(proxy)
+    const post = async (content: string) =>
+      JSON.parse(
+        await (await fetch(`http://localhost:${port}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content }] }) })).text(),
+      ).content[0].text as string
+
+    const SECRET = 'AKIAIOSFODNN7EXAMPLE'
+    expect(await post(`first ${SECRET}`)).toBe(`first ${SECRET}`) // restored in its own reply
+    const other = await post('repeat after me: ⟨cx:1⟩ and ⟨cx:2⟩') // no secret here, but a stranger's placeholders
+    expect(other).toBe('repeat after me: ⟨cx:1⟩ and ⟨cx:2⟩')
+    expect(other).not.toContain(SECRET)
+  })
+
+  it('leaves a placeholder this request did not issue alone, even when it issued others', async () => {
+    const upPort = await listen(echo('json'))
+    const proxy = createProxyServer({ port: 0, mode: 'redact', reversible: true, signature: false, upstream: `http://localhost:${upPort}` })
+    const port = await listen(proxy)
+    const SECRET = 'AKIAIOSFODNN7EXAMPLE'
+    const r = await fetch(`http://localhost:${port}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: `${SECRET} and a guess ⟨cx:7⟩` }] }),
+    })
+    const text = JSON.parse(await r.text()).content[0].text as string
+    expect(text).toBe(`${SECRET} and a guess ⟨cx:7⟩`)
+  })
+})
+
+// A model streams its answer in small deltas, and a placeholder is a few tokens long:
+// it arrives cut across events (`⟨cx`, `:1`, `⟩`). The reply was restored by searching
+// the raw body, so a cut placeholder was never found and the client was handed the
+// placeholder instead of its value.
+describe('--reversible restores a placeholder cut across streamed deltas', () => {
+  const SECRET = 'AKIAIOSFODNN7EXAMPLE'
+  const ev = (o: unknown) => `data: ${JSON.stringify(o)}\n\n`
+  // each shape cuts the placeholder at every position, in turn
+  const SHAPES: Record<string, { frame: (piece: string) => string; read: (d: Record<string, any>) => string }> = {
+    anthropic: {
+      frame: (t) => `event: content_block_delta\n${ev({ type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: t } })}`,
+      read: (d) => d.delta?.text ?? '',
+    },
+    'openai chat': {
+      frame: (t) => ev({ choices: [{ index: 0, delta: { content: t } }] }),
+      read: (d) => d.choices?.[0]?.delta?.content ?? '',
+    },
+    'openai responses': {
+      frame: (t) => ev({ type: 'response.output_text.delta', delta: t }),
+      read: (d) => (typeof d.delta === 'string' ? d.delta : ''),
+    },
+  }
+
+  function streamer(frame: (p: string) => string, cuts: number[]): Server {
+    return createServer(async (req, res) => {
+      const ch: Buffer[] = []
+      for await (const c of req) ch.push(c as Buffer)
+      const text = (JSON.parse(Buffer.concat(ch).toString('utf8')) as { messages: Array<{ content: string }> }).messages[0]!.content
+      const at = [0, ...cuts, text.length]
+      res.writeHead(200, { 'content-type': 'text/event-stream' })
+      for (let i = 0; i < at.length - 1; i++) res.write(frame(text.slice(at[i]!, at[i + 1]!)))
+      res.end('data: [DONE]\n\n')
+    })
+  }
+
+  async function reply(frame: (p: string) => string, cuts: number[], content: string): Promise<string> {
+    const upPort = await listen(streamer(frame, cuts))
+    const proxy = createProxyServer({ port: 0, mode: 'redact', reversible: true, signature: false, upstream: `http://localhost:${upPort}` })
+    const port = await listen(proxy)
+    const res = await fetch(`http://localhost:${port}/v1/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content }] }),
+    })
+    return res.text()
+  }
+
+  const said = (body: string, read: (d: Record<string, any>) => string): string =>
+    body
+      .split('\n')
+      .filter((l) => l.startsWith('data: ') && l !== 'data: [DONE]')
+      .map((l) => read(JSON.parse(l.slice(6)) as Record<string, any>))
+      .join('')
+
+  for (const [name, shape] of Object.entries(SHAPES)) {
+    it(`${name}: the value comes back wherever the placeholder is cut`, async () => {
+      const content = `key ${SECRET} end`
+      // the request carries the secret; the upstream echoes the redacted text, so the
+      // placeholder starts at 4 and is 6 characters long: cut it at each inner position
+      for (const cut of [5, 6, 7, 8, 9]) {
+        const body = await reply(shape.frame, [cut], content)
+        expect(said(body, shape.read), `cut at ${cut}`).toBe(content)
+      }
+      const body = await reply(shape.frame, [5, 6, 7, 8, 9, 10], content)
+      expect(said(body, shape.read), 'cut at every position').toBe(content)
+    })
+  }
+
+  it('leaves a cut placeholder this request did not issue alone', async () => {
+    // the request has a secret of its own (so restoring runs), and the reply also carries
+    // a placeholder it never issued, cut in two
+    const content = `${SECRET} then ⟨cx:7⟩`
+    const body = await reply(SHAPES['anthropic']!.frame, [14, 16], content)
+    expect(said(body, SHAPES['anthropic']!.read)).toBe(content)
+  })
+
+  it('keeps every event valid JSON when the value has quotes and a newline', async () => {
+    const content = `k ${PEM} z`
+    const body = await reply(SHAPES['openai chat']!.frame, [3, 4, 5, 6], content)
+    for (const l of body.split('\n').filter((x) => x.startsWith('data: ') && x !== 'data: [DONE]')) JSON.parse(l.slice(6))
+    expect(said(body, SHAPES['openai chat']!.read)).toBe(content)
+  })
+})
+
+// restoreStream on its own, so each rule can be pinned with a small input.
+describe('restoreStream', () => {
+  const ev = (o: unknown) => `data: ${JSON.stringify(o)}`
+  const vault = new Map([['⟨cx:1⟩', 'AKIA-ONE'], ['⟨cx:2⟩', 'two"quoted\nline']])
+  const said = (text: string): string =>
+    text
+      .split('\n')
+      .filter((l) => l.startsWith('data:') && !l.includes('[DONE]'))
+      .map((l) => (JSON.parse(l.replace(/^data: ?/, '')) as { t: string }).t)
+      .join('')
+
+  it('returns a stream with no placeholder unchanged, byte for byte, escapes included', () => {
+    const raw = 'event: x\ndata: {"t":"caf\\u00e9 \\/ ok"}\n\ndata: [DONE]\n\n'
+    expect(restoreStream(raw, vault)).toBe(raw)
+  })
+
+  it('leaves an event with nothing to restore as it was written, even next to one that changes', () => {
+    const untouched = 'data: {"t":"caf\\u00e9 \\/ ok","n":1.10}'
+    const out = restoreStream(`${untouched}\n\n${ev({ t: '⟨cx:1⟩' })}\n\n`, vault)
+    expect(out.split('\n')[0]).toBe(untouched)
+    expect(said(out)).toBe('caf\u00e9 / okAKIA-ONE')
+  })
+
+  it('reads `data:` with and without the space', () => {
+    const out = restoreStream(`data:${JSON.stringify({ t: '⟨cx' })}\n\ndata:${JSON.stringify({ t: ':1⟩' })}\n\n`, vault)
+    expect(said(out)).toBe('AKIA-ONE')
+    expect(out).toContain('data:{')
+  })
+
+  it('restores a whole placeholder on a line that is not JSON, and leaves other lines alone', () => {
+    const out = restoreStream('event: ping\ndata: ⟨cx:1⟩ is here\n\ndata: [DONE]\n', vault)
+    expect(out).toBe('event: ping\ndata: AKIA-ONE is here\n\ndata: [DONE]\n')
+  })
+
+  it('keeps a value with a newline on one line when the data field is not JSON, so the stream is not cut', () => {
+    const out = restoreStream('data: ⟨cx:2⟩\n\n', vault)
+    expect(out.split('\n')).toEqual(['data: two\\"quoted\\nline', '', ''])
+  })
+
+  it('reads a stream that starts with a byte order mark', () => {
+    const out = restoreStream('\uFEFF' + [ev({ t: '⟨cx' }), ev({ t: ':1⟩' })].join('\n\n') + '\n\n', vault)
+    expect(out.startsWith('\uFEFF')).toBe(true)
+    expect(said(out.slice(1))).toBe('AKIA-ONE')
+  })
+
+  it('restores into a tool-input fragment (partial_json) with the extra layer of escaping its text needs', () => {
+    // the fragments join into JSON text: {"k":"<value>"}; the value sits inside a JSON string there
+    const frags = ['{"k":"', '⟨cx', ':2⟩"}']
+    const out = restoreStream(frags.map((f) => `data: ${JSON.stringify({ type: 'content_block_delta', delta: { type: 'input_json_delta', partial_json: f } })}`).join('\n\n') + '\n\n', vault)
+    const joined = out
+      .split('\n')
+      .filter((l) => l.startsWith('data: '))
+      .map((l) => (JSON.parse(l.slice(6)) as { delta: { partial_json: string } }).delta.partial_json)
+      .join('')
+    expect(JSON.parse(joined)).toEqual({ k: 'two"quoted\nline' })
+  })
+
+  it('finds a placeholder that starts in a later delta, or exactly at the start of one', () => {
+    const cases: string[][] = [
+      ['ab', 'cd', '⟨cx', ':1⟩', 'ef'],
+      ['xx', '⟨cx:', '1⟩'],
+      ['⟨', 'c', 'x', ':', '1', '⟩'],
+      ['a⟨cx:1⟩b', '⟨cx:1⟩'],
+    ]
+    for (const pieces of cases) {
+      const out = restoreStream(pieces.map((t) => ev({ t })).join('\n\n') + '\n\n', vault)
+      expect(said(out), JSON.stringify(pieces)).toBe(pieces.join('').split('⟨cx:1⟩').join('AKIA-ONE'))
+    }
+  })
+
+  it('reads placeholders with two digits', () => {
+    const big = new Map<string, string>()
+    for (let i = 1; i <= 12; i++) big.set(`⟨cx:${i}⟩`, `value-${i}`)
+    const out = restoreStream([ev({ t: 'a ⟨cx:1' }), ev({ t: '0⟩ b ⟨cx:12⟩' })].join('\n\n') + '\n\n', big)
+    expect(said(out)).toBe('a value-10 b value-12')
+  })
+
+  it('restores two strings of the same event, and keeps the event valid JSON when the value needs escaping', () => {
+    const out = restoreStream(`${ev({ a: '⟨cx:1⟩', b: 'x ⟨cx:2⟩ y', c: 7 })}\n\n`, vault)
+    const parsed = JSON.parse(out.replace(/^data: /, '').trim()) as { a: string; b: string; c: number }
+    expect(parsed).toEqual({ a: 'AKIA-ONE', b: 'x two"quoted\nline y', c: 7 })
+  })
+
+  it('does not join strings that sit at different places', () => {
+    const out = restoreStream(`${ev({ a: '⟨cx', b: ':1⟩' })}\n\n`, vault)
+    expect(JSON.parse(out.replace(/^data: /, '').trim())).toEqual({ a: '⟨cx', b: ':1⟩' })
+  })
+
+  it('leaves a placeholder the vault does not hold', () => {
+    const out = restoreStream(`${ev({ t: '⟨cx:9⟩ and ⟨cx:1⟩' })}\n\n`, vault)
+    expect(said(out)).toBe('⟨cx:9⟩ and AKIA-ONE')
   })
 })

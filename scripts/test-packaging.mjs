@@ -24,8 +24,12 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const results = []
 const record = (ok, name, detail = '') => results.push([ok, name, detail])
 
+// npm is npm.cmd on Windows, which Node will not spawn without a shell. When run through
+// `npm run` the real entry point is in npm_execpath: run it with node, the same everywhere.
 const npm = (args, cwd) =>
-  execFileSync('npm', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  process.env.npm_execpath
+    ? execFileSync(process.execPath, [process.env.npm_execpath, ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    : execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], shell: process.platform === 'win32' })
 
 const box = mkdtempSync(join(tmpdir(), 'contextia-pack-'))
 try {
@@ -38,10 +42,11 @@ try {
 
   // Build, then pack exactly what publish would send.
   npm(['run', 'build'], root)
+  const current = Buffer.compare(committedBundle, readFileSync(vendor)) === 0
   record(
-    Buffer.compare(committedBundle, readFileSync(vendor)) === 0,
+    current,
     'the plugin bundle (vendor/engine.js) is the current engine',
-    'stale: run `npm run build` and commit plugins/contextia/vendor/engine.js',
+    current ? '' : 'stale: run `npm run build` and commit plugins/contextia/vendor/engine.js',
   )
   for (const pkg of ['packages/engine', 'packages/cli']) {
     npm(['pack', '--pack-destination', box], join(root, pkg))
@@ -95,7 +100,10 @@ console.log('ok ' + detectors.length)
 
   // And the CLI has to run from the installed bin.
   try {
-    const out = execFileSync(process.execPath, ['node_modules/.bin/contextia', 'version'], {
+    // node_modules/.bin/contextia is a shell shim on Windows: run the file the package declares as its bin
+    const installed = JSON.parse(readFileSync(join(app, 'node_modules', '@sbr0nch', 'contextia', 'package.json'), 'utf8'))
+    const binFile = typeof installed.bin === 'string' ? installed.bin : installed.bin.contextia
+    const out = execFileSync(process.execPath, [join(app, 'node_modules', '@sbr0nch', 'contextia', binFile), 'version'], {
       cwd: app,
       encoding: 'utf8',
     })

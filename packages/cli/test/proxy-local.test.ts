@@ -80,14 +80,15 @@ const brotliCompressSync = (b: Buffer): Buffer => brotli(b, { params: { [constan
 
 describe('decodeBody refuses a decompression bomb', () => {
   const MB = 1024 * 1024
+  const CAP = 5 * MB // what these tests ask decodeBody to enforce
   it('returns null when the output would pass the scan cap', () => {
-    const zeros = Buffer.alloc(12 * MB) // the scan cap is 5 MB
+    const zeros = Buffer.alloc(12 * MB)
     for (const packed of [gzipSync(zeros), deflateSync(zeros), brotliCompressSync(zeros)]) {
       expect(packed.length).toBeLessThan(MB)
     }
-    expect(decodeBody(gzipSync(zeros), 'gzip')).toBeNull()
-    expect(decodeBody(deflateSync(zeros), 'deflate')).toBeNull()
-    expect(decodeBody(brotliCompressSync(zeros), 'br')).toBeNull()
+    expect(decodeBody(gzipSync(zeros), 'gzip', CAP)).toBeNull()
+    expect(decodeBody(deflateSync(zeros), 'deflate', CAP)).toBeNull()
+    expect(decodeBody(brotliCompressSync(zeros), 'br', CAP)).toBeNull()
   })
 
   it('still decodes an ordinary body', () => {

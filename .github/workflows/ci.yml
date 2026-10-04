@@ -24,6 +24,7 @@ jobs:
       # What npm would publish, installed into a project with no workspace to
       # fall back on. Five releases of the engine could not be imported at all.
       - run: npm run test:pack
+      - run: npm run check:versions
 
       # The proxy as a process on a socket, which is where a client hanging up
       # mid-request used to kill it outright.
@@ -35,3 +36,13 @@ jobs:
       # composer looks like while multi-line prompts went unscanned.
       - run: npx playwright install --with-deps chromium
       - run: npm run test:dom
+
+      # axe-core on the popup, the settings page and the in-page indicator, both colour
+      # schemes and three widths, plus keyboard use and announcements axe has no rule for.
+      - run: npm run test:a11y --workspace @sbr0nch/contextia-extension
+      # Every screen in its states (empty, with activity, storage failing, blocked, too long) at phone and desktop widths.
+      - run: npm run test:states --workspace @sbr0nch/contextia-extension
+      # The same extension installed in the runner's real Firefox, driven with real key presses.
+      - run: npm run test:firefox --workspace @sbr0nch/contextia-extension
+        env:
+          REQUIRE_FIREFOX: '1'

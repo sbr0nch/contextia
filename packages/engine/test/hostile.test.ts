@@ -31,6 +31,9 @@ const SHAPES: Record<string, (n: number) => string> = {
   'hyphenated 63-char labels': (n) => ('a-'.repeat(31) + 'a.').repeat(n / 64),
   'thirty-char labels': (n) => ('a'.repeat(30) + '.').repeat(n / 31),
   'repeated KEY=': (n) => 'API_KEY='.repeat(n / 8),
+  'keyword run, no equals': (n) => 'AUTH'.repeat(n / 4),
+  'keyword run, lower case': (n) => 'token'.repeat(n / 5),
+  'keyword run after a newline': (n) => '\nSECRET_TOKEN_AUTH_'.repeat(n / 19) + 'A'.repeat(100),
   'long upper line, many lines': (n) => ('\n' + 'A'.repeat(999)).repeat(n / 1000),
   'BEGIN PRIVATE, no END': (n) => '-----BEGIN PRIVATE KEY-----\n'.repeat(n / 28),
   'BEGIN RSA, no END': (n) => '-----BEGIN RSA PRIVATE KEY-----'.repeat(n / 31),
@@ -61,9 +64,14 @@ function best(scan: (t: string) => unknown, text: string): number {
 const SMALL = 40_000
 const LARGE = 160_000 // 4x
 
+// Each detector is timed on 28 shapes at two sizes, three times each: seconds on a busy
+// runner. The default 5 s timeout failed `internal_hostname` on a loaded GitHub runner
+// (5.5 s) while the growth law itself held. The law is the ratio, not the wall clock.
+const SLOW = 120_000
+
 describe('no detector is superlinear on hostile input', () => {
   for (const d of detectors) {
-    it(d.id, () => {
+    it(d.id, { timeout: SLOW }, () => {
       const offenders: string[] = []
       for (const [name, make] of Object.entries(SHAPES)) {
         const small = make(SMALL)
@@ -83,7 +91,7 @@ describe('no detector is superlinear on hostile input', () => {
 describe('the whole engine on a 1 MB hostile input', () => {
   // Linear growth is not enough: 63-character labels were linear and still took 20 s per MB.
   for (const name of ['dotted labels', 'digit-dash runs', 'BEGIN PRIVATE, no END', 'jwt-like dots', 'host-like', 'hyphenated 63-char labels', 'thirty-char labels']) {
-    it(`${name} finishes in under 3 s with every detector on`, () => {
+    it(`${name} finishes in under 3 s with every detector on`, { timeout: SLOW }, () => {
       const text = SHAPES[name]!(1_000_000)
       const all = { enabledDetectors: detectors.map((d) => d.id) }
       const t0 = performance.now()

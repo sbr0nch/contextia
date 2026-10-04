@@ -1,0 +1,24 @@
+name: Mutation
+
+# Does the unit suite notice when the code is wrong? Stryker rewrites the code in small
+# ways and counts the rewrites the tests catch. It takes a while and cannot read the
+# repository's TypeScript 7, so it runs on a schedule in a scratch copy
+# (scripts/mutation.mjs), not on every push. A module below its floor fails the run.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 3 * * 2'
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build --workspace @sbr0nch/contextia-engine
+      - run: node scripts/mutation.mjs

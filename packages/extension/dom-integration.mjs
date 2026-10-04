@@ -14,24 +14,13 @@
 // Each case asserts against the badge the extension itself renders, so what is
 // verified is what a user would see.
 
-import { chromium } from 'playwright'
-import { mkdtemp, rm } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve, dirname } from 'node:path'
+import { resolve, dirname } from 'node:path'
+import { launchWithExtension } from './browser.mjs'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const DIST = resolve(here, 'dist')
-
-function executablePath() {
-  const pinned = chromium.executablePath()
-  if (existsSync(pinned)) return undefined
-  for (const p of ['/opt/pw-browsers/chromium', '/usr/bin/chromium', '/usr/bin/chromium-browser']) {
-    if (existsSync(p)) return p
-  }
-  return undefined
-}
 
 const AWS = 'AKIAIOSFODNN7EXAMPLE'
 const GH = 'ghp_' + 'a'.repeat(36)
@@ -108,9 +97,8 @@ async function badgeCount(pg) {
 // secret landed reached the site, and one at 200 ms did not. Each case types the
 // secret, presses Enter after the delay, and asks whether the page saw the Enter.
 const RACE_DELAYS = [0, 20, 100]
-async function blockRace(ctx) {
+async function blockRace(ctx, sw) {
   let failed = 0
-  const sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'))
   await sw.evaluate(() => chrome.storage.local.set({ settings: { mode: 'block' } }))
   try {
     for (const delay of RACE_DELAYS) {
@@ -142,22 +130,113 @@ async function blockRace(ctx) {
   return failed
 }
 
+// A page can hold more than one editor: the chat composer, and the box that opens when a
+// sent message is edited. The handlers decided from the first visible composer, so a send
+// from the second one was judged on the first one's (empty) text and went through.
+const TWO_EDITORS = [
+  { name: 'Enter in the edit box, which holds the secret', press: '#edit', secretIn: '#edit', expectSent: 0 },
+  { name: 'click on the edit box\'s own send button', click: '#edit-send', secretIn: '#edit', expectSent: 0 },
+  { name: 'Enter in the main composer, which holds the secret', press: '#prompt-textarea', secretIn: '#prompt-textarea', expectSent: 0 },
+  { name: 'Enter in the edit box when only the main composer holds a secret', press: '#edit', secretIn: '#prompt-textarea', expectSent: 1 },
+  { name: 'Enter in the edit box, nothing anywhere', press: '#edit', secretIn: null, expectSent: 1 },
+]
+async function twoEditors(ctx, sw) {
+  let failed = 0
+  await sw.evaluate(() => chrome.storage.local.set({ settings: { mode: 'block' } }))
+  try {
+    for (const c of TWO_EDITORS) {
+      const pg = await ctx.newPage()
+      await pg.route('**/*', (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: 'text/html; charset=utf-8',
+          body: page(`<textarea id="prompt-textarea" style="width:500px;height:50px"></textarea>
+<form id="f" onsubmit="event.preventDefault(); window.sent++"><textarea id="edit" style="width:500px;height:50px"></textarea><button id="edit-send" type="submit">Send</button></form>
+<script>window.sent=0
+for (const id of ['prompt-textarea','edit']) document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')window.sent++})</script>`),
+        }),
+      )
+      await pg.goto('https://claude.ai/', { waitUntil: 'domcontentloaded' })
+      await pg.waitForTimeout(700)
+      if (c.secretIn) {
+        await pg.focus(c.secretIn)
+        await pg.keyboard.insertText('token ' + GH)
+        await pg.waitForTimeout(400) // past the debounce: this case is about WHICH editor, not about timing
+      }
+      if (c.press) {
+        await pg.focus(c.press)
+        await pg.keyboard.press('Enter')
+      } else {
+        await pg.click(c.click)
+      }
+      await pg.waitForTimeout(300)
+      const sent = await pg.evaluate(() => window.sent)
+      const ok = sent === c.expectSent
+      if (!ok) failed++
+      console.log(`  ${ok ? 'ok  ' : 'FAIL'}  two editors: ${c.name.padEnd(62)} reached the site ${sent} time(s), expected ${c.expectSent}`)
+      await pg.close()
+    }
+  } finally {
+    await sw.evaluate(() => chrome.storage.local.remove('settings'))
+  }
+  return failed
+}
+
+// One form, two editors: a system prompt and the message box. A send carries both, so a secret in
+// either must stop it, whichever has the focus. The first editor in the form used to be the only one read.
+const FORM_EDITORS = [
+  { name: 'secret in the message box, focus on the button', secretIn: '#msg', focus: '#go', expectSent: 0 },
+  { name: 'secret in the system prompt, message box focused', secretIn: '#sys', focus: '#msg', expectSent: 0 },
+  { name: 'secret in the system prompt, nothing focused', secretIn: '#sys', focus: '#go', expectSent: 0 },
+  { name: 'nothing secret in either', secretIn: null, focus: '#go', expectSent: 1 },
+]
+async function formEditors(ctx, sw) {
+  let failed = 0
+  await sw.evaluate(() => chrome.storage.local.set({ settings: { mode: 'block' } }))
+  try {
+    for (const c of FORM_EDITORS) {
+      const pg = await ctx.newPage()
+      await pg.route('**/*', (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: 'text/html; charset=utf-8',
+          body: page(`<form id="f" onsubmit="event.preventDefault(); window.sent++"><textarea id="sys" style="width:500px;height:50px"></textarea><textarea id="msg" style="width:500px;height:50px"></textarea><button id="go" type="submit" aria-label="Send message">Send</button></form><script>window.sent=0</script>`),
+        }),
+      )
+      await pg.goto('https://claude.ai/', { waitUntil: 'domcontentloaded' })
+      await pg.waitForTimeout(700)
+      if (c.secretIn) {
+        await pg.focus(c.secretIn)
+        await pg.keyboard.insertText('token ' + GH)
+        await pg.waitForTimeout(400)
+      }
+      await pg.focus(c.focus)
+      await pg.click('#go')
+      await pg.waitForTimeout(300)
+      const sent = await pg.evaluate(() => window.sent)
+      const ok = sent === c.expectSent
+      if (!ok) failed++
+      console.log(`  ${ok ? 'ok  ' : 'FAIL'}  one form, two editors: ${c.name.padEnd(52)} reached the site ${sent} time(s), expected ${c.expectSent}`)
+      await pg.close()
+    }
+  } finally {
+    await sw.evaluate(() => chrome.storage.local.remove('settings'))
+  }
+  return failed
+}
+
 async function main() {
   if (!existsSync(DIST)) {
     console.error('build the extension first: npm run build --workspace @sbr0nch/contextia-extension')
     process.exit(1)
   }
-  const profile = await mkdtemp(join(tmpdir(), 'contextia-dom-'))
-  const ctx = await chromium.launchPersistentContext(profile, {
-    headless: true,
-    viewport: { width: 900, height: 700 },
-    executablePath: executablePath(),
-    args: [`--disable-extensions-except=${DIST}`, `--load-extension=${DIST}`, '--no-sandbox'],
-  })
+  const { ctx, sw, close } = await launchWithExtension(DIST, { viewport: { width: 900, height: 700 } })
 
   let failed = 0
   try {
-    failed += await blockRace(ctx) // first: the service worker is awake right after launch
+    failed += await blockRace(ctx, sw) // first: the service worker is awake right after launch
+    failed += await twoEditors(ctx, sw)
+    failed += await formEditors(ctx, sw)
     for (const c of CASES) {
       const pg = await ctx.newPage()
       await pg.route('**/*', (r) =>
@@ -180,11 +259,10 @@ async function main() {
       await pg.close()
     }
   } finally {
-    await ctx.close()
-    await rm(profile, { recursive: true, force: true })
+    await close()
   }
 
-  console.log(failed ? `\n${failed} case(s) failed\n` : `\nall ${CASES.length + RACE_DELAYS.length} cases passed\n`)
+  console.log(failed ? `\n${failed} case(s) failed\n` : `\nall ${CASES.length + RACE_DELAYS.length + TWO_EDITORS.length + FORM_EDITORS.length} cases passed\n`)
   process.exit(failed ? 1 : 0)
 }
 

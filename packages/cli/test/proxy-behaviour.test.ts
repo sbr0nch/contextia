@@ -13,6 +13,8 @@ import {
   textNodes,
   createProxyServer,
   MAX_STAT_KEYS,
+  DEFAULT_MAX_SCAN_BODY,
+  DEFAULT_MAX_BODY,
   type ProxyStats,
   type ProxyMode,
 } from '../src/proxy.js'
@@ -320,7 +322,7 @@ describe('methods, size limits and refusals', () => {
       s.listen(0, () => r((s.address() as AddressInfo).port))
     })
 
-  async function setup(mode: ProxyMode) {
+  async function setup(mode: ProxyMode, limits: { maxBodyBytes?: number; maxScanBytes?: number } = {}) {
     const calls: Array<{ method: string; body: string }> = []
     const up = createServer(async (req, res) => {
       const ch: Buffer[] = []
@@ -330,7 +332,7 @@ describe('methods, size limits and refusals', () => {
       res.end('{"ok":1}')
     })
     const upPort = await listen(up)
-    const proxy = createProxyServer({ port: 0, mode, upstream: `http://localhost:${upPort}` })
+    const proxy = createProxyServer({ port: 0, mode, upstream: `http://localhost:${upPort}`, ...limits })
     const port = await listen(proxy)
     const get = async (path: string, init: RequestInit = {}) => {
       const r = await fetch(`http://localhost:${port}${path}`, init)
@@ -388,9 +390,9 @@ describe('methods, size limits and refusals', () => {
     expect(t.calls).toHaveLength(0)
   })
 
-  it('block: a body over the 5 MB scan cap is refused as oversize, and counted as one block', async () => {
-    const t = await setup('block')
-    const r = await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x'.repeat(5 * 1024 * 1024 + 10)) })
+  it('block: a body over the scan cap is refused as oversize, and counted as one block', async () => {
+    const t = await setup('block', { maxScanBytes: 100_000 })
+    const r = await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x'.repeat(100_010)) })
     expect(r.status).toBe(403)
     expect(JSON.parse(r.text).error).toMatchObject({ type: 'contextia_unscannable', reason: 'oversize' })
     expect(await t.stats()).toMatchObject({ blocked: 1 })
@@ -423,10 +425,129 @@ describe('methods, size limits and refusals', () => {
   })
 
   it('warn: forwards an oversize and an unreadable body, and counts each as unscanned', async () => {
-    const t = await setup('warn')
-    await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x'.repeat(5 * 1024 * 1024 + 10)) })
+    const t = await setup('warn', { maxScanBytes: 100_000 })
+    await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x'.repeat(100_010)) })
     await t.get('/v1/messages', { method: 'POST', headers: { ...JSON_H, 'content-encoding': 'zstd' }, body: 'x' })
     expect(t.calls).toHaveLength(2)
     expect(await t.stats()).toMatchObject({ unscanned: 2, blocked: 0 })
+  })
+
+  // A 300 MB body took the proxy to 1,268 MB: the whole body was read into memory, and
+  // then copied. There was no limit on what a client, or a web page, could make it hold.
+  it('answers 413 to a body over the read limit, without forwarding it, and stays up', async () => {
+    const t = await setup('redact', { maxBodyBytes: 200_000 })
+    const big = await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('x'.repeat(250_000)) })
+    expect(big.status).toBe(413)
+    expect(JSON.parse(big.text).error.type).toBe('contextia_request_too_large')
+    expect(t.calls).toHaveLength(0)
+    const ok = await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: body('small') })
+    expect(ok.status).toBe(200)
+    expect(t.calls).toHaveLength(1)
+  })
+
+  it('stops reading at the limit when the size is not declared (chunked)', async () => {
+    const t = await setup('redact', { maxBodyBytes: 100_000 })
+    const chunk = Buffer.alloc(40_000, 0x61)
+    const r = await new Promise<number>((resolve) => {
+      const q = request({ host: '127.0.0.1', port: t.port, method: 'POST', path: '/v1/x', headers: { 'content-type': 'application/octet-stream', 'transfer-encoding': 'chunked' } }, (res) => {
+        res.resume()
+        res.on('end', () => resolve(res.statusCode ?? 0))
+      })
+      q.on('error', () => resolve(413)) // the proxy may close the socket as it answers
+      for (let i = 0; i < 10; i++) q.write(chunk)
+      q.end()
+    })
+    expect(r).toBe(413)
+    expect(t.calls).toHaveLength(0)
+  })
+
+  it('applies a small limit to the events route too', async () => {
+    const t = await setup('warn')
+    const r = await t.get('/__contextia/events', { method: 'POST', headers: JSON_H, body: JSON.stringify({ events: [ev()], pad: 'x'.repeat(2_000_000) }) })
+    expect(r.status).toBe(413)
+  })
+
+  it('has defaults that fit the largest requests an LLM API accepts, and a scan cap below the read cap', async () => {
+    expect(DEFAULT_MAX_SCAN_BODY).toBe(32 * 1024 * 1024)
+    expect(DEFAULT_MAX_BODY).toBe(64 * 1024 * 1024)
+    expect(DEFAULT_MAX_SCAN_BODY).toBeLessThan(DEFAULT_MAX_BODY)
+  })
+
+  // Redact used to parse the body and write it back, which is not a faithful copy.
+  it('redact changes only the secret: numbers, spacing, key order and escapes arrive as sent', async () => {
+    const t = await setup('redact')
+    const sent =
+      '{ "user_id" : 9007199254740993,\n  "price":1.10, "big":123456789012345678901234567890, "zero":-0.0e0,\n' +
+      `  "note":"keep\\/this", "messages":[{"role":"user","content":"k ${SECRET}"}] , "seed":18446744073709551615 }`
+    await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: sent })
+    const got = t.calls[0]!.body
+    expect(got).not.toContain(SECRET)
+    for (const keep of ['9007199254740993', '1.10', '123456789012345678901234567890', '-0.0e0', '18446744073709551615', 'keep\\/this', ' "user_id" : ']) {
+      expect(got, keep).toContain(keep)
+    }
+    expect(got.replace(/"k [^"]*"/, '""')).toBe(sent.replace(/"k [^"]*"/, '""'))
+  })
+
+  it('a body with nothing to redact is forwarded exactly as it came, bytes and encoding', async () => {
+    const t = await setup('redact')
+    const sent = '{"a" :  9007199254740993 ,"messages":[{"role":"user","content":"hello"}]}'
+    await t.get('/v1/messages', { method: 'POST', headers: JSON_H, body: sent })
+    expect(t.calls[0]!.body).toBe(sent)
+  })
+
+  it('a repeated key hides nothing: every occurrence is scanned, in every mode', async () => {
+    const K2 = 'AKIAABCDEFGHIJKLMNOP'
+    // the secret is in the occurrence JSON.parse drops (the first), in the one it keeps, and under a key that repeats in a nested object
+    const dup = `{"messages":[{"role":"user","content":"k ${SECRET}"}],"messages":[{"role":"user","content":"k ${K2}"}],"metadata":{"a":"x ${SECRET}","a":2}}`
+    const blocked = await setup('block')
+    const a = await blocked.get('/v1/messages', { method: 'POST', headers: JSON_H, body: dup })
+    expect(a.status).toBe(403)
+    expect(JSON.parse(a.text).error).toMatchObject({ type: 'contextia_blocked' })
+    expect(blocked.calls).toHaveLength(0)
+
+    const red = await setup('redact')
+    await red.get('/v1/messages', { method: 'POST', headers: JSON_H, body: dup })
+    const sent = red.calls[0]!.body
+    expect(sent).not.toContain(SECRET)
+    expect(sent).not.toContain(K2)
+    expect(sent).toContain('"metadata":{"a":"x ⟨redacted:aws_access_key_id⟩","a":2}')
+
+    const warned = await setup('warn')
+    await warned.get('/v1/messages', { method: 'POST', headers: JSON_H, body: dup })
+    expect(await warned.stats()).toMatchObject({ withFindings: 1, unscanned: 0 })
+
+    const clean = `{"messages":[{"role":"user","content":"hello"}],"messages":[{"role":"user","content":"hi"}]}`
+    const ok = await setup('block')
+    expect((await ok.get('/v1/messages', { method: 'POST', headers: JSON_H, body: clean })).status).toBe(200)
+    expect(ok.calls[0]!.body).toBe(clean)
+  })
+
+  it('a repeated key and a secret used as a key, in one body, are both redacted and the body stays valid', async () => {
+    const body = `{"a":"x ${SECRET}","a":"y","${SECRET}":1}`
+    const red = await setup('redact')
+    await red.get('/v1/messages', { method: 'POST', headers: JSON_H, body })
+    const sent = red.calls[0]!.body
+    expect(sent).not.toContain(SECRET)
+    expect(sent).toBe('{"a":"x ⟨redacted:aws_access_key_id⟩","a":"y","⟨redacted:aws_access_key_id⟩":1}')
+  })
+
+  it('reads the keys: a secret used as an object key is found, blocked, and redacted', async () => {
+    const body = JSON.stringify({ messages: [{ role: 'user', content: 'hi' }], metadata: { [SECRET]: 'x', other: 1 } })
+    const blocked = await setup('block')
+    expect((await blocked.get('/v1/messages', { method: 'POST', headers: JSON_H, body })).status).toBe(403)
+    expect(blocked.calls).toHaveLength(0)
+    const red = await setup('redact')
+    await red.get('/v1/messages', { method: 'POST', headers: JSON_H, body })
+    const sent = red.calls[0]!.body
+    expect(sent).not.toContain(SECRET)
+    expect(JSON.parse(sent).metadata).toEqual({ '⟨redacted:aws_access_key_id⟩': 'x', other: 1 })
+  })
+
+  it('a body that is not valid JSON by the stricter reader is unparsable, never scanned as if it were', async () => {
+    const blocked = await setup('block')
+    const deep = '['.repeat(600) + `"${SECRET}"` + ']'.repeat(600) // valid JSON, nested past the reader's limit
+    const r = await blocked.get('/v1/messages', { method: 'POST', headers: JSON_H, body: deep })
+    expect(r.status).toBe(403)
+    expect(JSON.parse(r.text).error.reason).toBe('unparsable')
   })
 })

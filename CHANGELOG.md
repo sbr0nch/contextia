@@ -1,6 +1,99 @@
 # Changelog
 
-## Unreleased
+## v2.2.0
+
+Contains everything in v2.1.0 below and the changes after it. The `v2.1.0` tag and GitHub release
+exist, but 2.1.0 was never published to npm (the last npm version before this one is 2.0.3) and the
+version fields in that tag still said 2.0.4; 2.2.0 is the first npm release with those fixes. The
+changes after 2.1.0 were found the same way: by running each surface as a user does, in real
+browsers and on Windows and macOS, and by looking at the pictures. Every fix has a test that
+fails without it; the measurements are in `docs/COVERAGE.md`.
+
+**Proxy**
+
+- Redact parsed the body and wrote it out again, which is not a faithful copy: `9007199254740993`
+  became `9007199254740992`, `1.10` became `1.1`, a repeated key was dropped. The edit is now made
+  on the text the client sent (a reader that agrees with `JSON.parse` on 80,000 random and mutated
+  documents), so a body with nothing to redact is forwarded byte for byte. A secret used as an
+  object key was never read; keys are scanned, blocked and redacted. A key that appears twice hides
+  nothing: `JSON.parse` keeps the last value and another parser the first, so every occurrence
+  is scanned (and redacted), in every mode. A first version of this refused such a body in Block
+  mode but forwarded it unscanned in Redact and Warn; an independent review caught it.
+- A 300 MB body took the proxy to 1,268 MB: it was read whole, with no limit. A body over 64 MB is
+  answered 413 without being forwarded (peak memory for the same 300 MB: 130 MB), and the scan cap
+  goes from 5 MB to 32 MB, so a 6 MB image request is no longer refused in Block mode. Decompression
+  stops at the same cap. After a 413 the rest of the body is read and dropped (for at most 30 s),
+  because on Windows and macOS the client otherwise saw a reset instead of the answer.
+- `--reversible` did not restore a placeholder that a streamed reply cut across deltas
+  (`⟨cx`, `:1`, `⟩`): the client received the placeholder. The text deltas are now joined
+  per field before restoring, also in a tool call's `partial_json` (restored with the extra layer
+  of escaping its text needs) and after a byte order mark. Tested with a stand-in streaming server,
+  not a live model. The reply is still held until it is complete.
+- An unreachable upstream was answered with `TypeError: fetch failed`; the reply now names the
+  upstream and the cause (`ECONNREFUSED`).
+
+**Engine**
+
+- `env_secret` took seconds on keyword-dense text with no `=` (`AUTHAUTH...`: 3.3 s at 80 KB, quadratic):
+  the name around the keyword is now bounded to 64 characters. Found by the same review.
+- `env_secret` only saw an assignment at the start of a line, so `OPENAI_API_KEY=sk-... python app.py`,
+  `docker run -e DB_PASSWORD=...` and a secret in a sentence went unseen (found by wrapping every
+  detector's fixtures in 15 real contexts: 32 of 3,015 failed, all this one). An UPPER_CASE
+  assignment is now read in the middle of a line too; a lower-case key still needs a line start
+  (case-insensitive it flagged 144 minified-code fragments in 3,311 files of `node_modules`; as
+  built, none). A shell variable (`$NAME`), a regular expression literal and a mid-line value holding
+  brackets, braces, commas or semicolons (a minified bundle) are not values.
+
+**CLI**
+
+- `contextia proxy` on a port that is taken crashed with `Unhandled error event`. It says the port
+  is in use (or not allowed) and exits 1.
+
+**Claude Code plugin**
+
+- The block could be lost: the hook called `process.exit()` right after writing, and on a pipe
+  written asynchronously the message never left the process and the prompt went through. It now
+  exits from the write callback.
+
+**Browser extension**
+
+- A send from a form that holds several editors (a system prompt and a message box) was judged on
+  the first editor only. It now judges every editor in the form. Found by the same review.
+- With two editors on the page (the composer, and the box that opens to edit a sent message)
+  a send was judged on the first one: a secret in the edit box went through in Block mode, and
+  a clean edit box was stopped for a secret sitting in the other. The editor is now taken from
+  the event.
+- Accessibility, measured with axe-core and the keyboard: the popup had no title or landmark and
+  a mode menu with no name; the settings page had 85 unlabelled checkboxes; the in-page
+  indicator was a `div` with no role or keyboard use; its panel went grey on a white page and
+  its small text measured 1.6:1 (4.5:1 is the minimum). It is now a button that opens a dialog
+  from Enter or Space, the panel is nearly opaque, and a blocked send is announced (role=alert).
+- In Block mode an Enter pressed on Contextia's own indicator or on "Redact all" was read as a
+  send and stopped, so a keyboard user could not resolve a block.
+- When the browser's storage could not be read the popup spun forever and the settings page
+  stayed blank with an uncaught error. Both now say so and offer "Try again".
+- Seen in a real Firefox: a white scrollbar track inside the dark detector list, and the
+  findings panel's title crowding its buttons. Fixed (dark scrollbars, a 320 px panel).
+
+**Build and checks**
+
+- A `Release` workflow publishes the two npm packages (trusted publishing, no stored token), builds the
+  Chrome and Firefox zips and the source zip AMO asks for, and attaches them to the GitHub release;
+  `npm run check:versions` fails when the five version fields, or a tag, disagree. `docs/RELEASING.md`.
+- `npm run test:pack` runs on Windows (it ran the installed CLI through npm's shell shim).
+- Browser checks in CI: `test:a11y` (axe-core, keyboard), `test:states` (every screen in 18
+  states at phone and desktop widths, with a fingerprint of each picture) and `test:firefox`
+  (the extension installed in a real Firefox, driven with real key presses).
+- A `Platforms` workflow runs the CLI, proxy and hook checks on Windows and macOS, Node 20 and 22;
+  a scheduled `Mutation` workflow (`scripts/mutation.mjs`) scores the unit tests on the engine,
+  proxy, core, JSON reader and the extension's pure modules.
+
+**Behaviour that changes**: Block accepts bodies up to 32 MB (it refused anything over 5 MB) and a
+request over 64 MB is answered 413;
+`env_secret` finds more (upper-case assignments anywhere in a line); the findings panel is 320 px
+wide instead of 300.
+
+## v2.1.0
 
 Found by running every surface the way a user does, with planted secrets and hostile
 input, and by comparing with a second tool. Every fix has a test that fails without it.

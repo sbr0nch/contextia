@@ -1,6 +1,6 @@
 {
   "name": "@sbr0nch/contextia-extension",
-  "version": "2.0.4",
+  "version": "2.2.0",
   "private": true,
   "description": "Contextia MV3 browser extension. Consumes @sbr0nch/contextia-engine.",
   "license": "MIT",
@@ -13,10 +13,15 @@
     "build:firefox": "node build.mjs --firefox",
     "package:firefox": "node build.mjs --firefox && node pack.mjs dist-firefox",
     "screenshots": "node build.mjs && node screenshots.mjs",
-    "test:dom": "node build.mjs && node dom-integration.mjs"
+    "test:dom": "node build.mjs && node dom-integration.mjs",
+    "test:a11y": "node build.mjs && node a11y.mjs",
+    "test:states": "node build.mjs && node states.mjs",
+    "test:firefox": "node firefox.mjs",
+    "test:states:update": "node build.mjs && node states.mjs --update"
   },
   "devDependencies": {
     "@types/chrome": "^0.2.6",
+    "axe-core": "^4.13.0",
     "esbuild": "^0.28.2",
     "happy-dom": "^20.11.2",
     "playwright": "^1.62.1",

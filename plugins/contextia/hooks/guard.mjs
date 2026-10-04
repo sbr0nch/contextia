@@ -32,12 +32,14 @@ function loadConfig() {
 }
 
 function block(reason) {
-  process.stdout.write(JSON.stringify({ decision: 'block', reason }))
-  process.exit(0)
+  // Exit from the write callback: process.exit() right after write() can drop the
+  // answer on a pipe that is written asynchronously, and a dropped answer is a prompt
+  // that goes through. (Not shown failing on Linux: the answer is about 1 KB. Defensive.)
+  process.stdout.write(JSON.stringify({ decision: 'block', reason }), () => process.exit(0))
 }
 
-try {
-  // Loaded here, not at the top, so a missing or broken bundle is caught below
+async function main() {
+  // Loaded here, not at the top, so a missing or broken bundle is caught by the caller
   // instead of crashing the process: the host treats a crash as a non-blocking
   // error and sends the prompt anyway.
   const { detectDetailed } = await import('../vendor/engine.js')
@@ -59,23 +61,25 @@ try {
   // A prompt too long to scan in full is unknown, not clean. This hook exists to
   // block, so it fails closed rather than waving through the part it never read.
   if (scan.truncated && scan.findings.length === 0) {
-    block(
+    return block(
       `Contextia blocked this prompt: it is ${prompt.length} characters and only the first ` +
         `${scan.scannedLength} could be scanned, so the rest was never checked for secrets. ` +
         `Send it in smaller pieces.`,
     )
   }
 
-  if (scan.findings.length === 0) process.exit(0)
+  if (scan.findings.length === 0) return process.exit(0)
 
   const types = [...new Set(scan.findings.map((f) => f.type))].join(', ')
   const tail = scan.truncated
     ? ` (only the first ${scan.scannedLength} of ${prompt.length} characters could be scanned)`
     : ''
-  block(`Contextia blocked this prompt: it contains ${types}${tail}. Remove the secret before sending; its value must not reach the model.`)
-} catch (err) {
+  return block(`Contextia blocked this prompt: it contains ${types}${tail}. Remove the secret before sending; its value must not reach the model.`)
+}
+
+main().catch((err) =>
   block(
     `Contextia could not scan this prompt (${err instanceof Error ? err.message : String(err)}), ` +
       `so it was blocked rather than sent unchecked. Reinstall or update the plugin, or disable it to send.`,
-  )
-}
+  ),
+)

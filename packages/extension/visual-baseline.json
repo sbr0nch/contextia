@@ -1,0 +1,20 @@
+{
+  "popup-empty-360": "77e07f305c000000",
+  "popup-with-activity-360": "77e07f77675f5800",
+  "popup-storage-error-360": "277e600000000000",
+  "options-default-390": "713a2f35093d1119",
+  "options-default-768": "613d233131312127",
+  "options-default-1280": "161e171717171e07",
+  "options-detector-search-768": "613d233131312127",
+  "options-storage-error-768": "7760000000000000",
+  "chat-clean-390": "a00100000000000e",
+  "chat-secrets-found-390": "a03100000000000e",
+  "chat-secrets-panel-open-390": "a0b00000c0dcfcee",
+  "chat-send-blocked-390": "a03100000000f0fc",
+  "chat-too-long-390": "a00500000000000e",
+  "chat-clean-1280": "4040400000000103",
+  "chat-secrets-found-1280": "4048400000000103",
+  "chat-secrets-panel-open-1280": "4848400006060607",
+  "chat-send-blocked-1280": "4040400000003133",
+  "chat-too-long-1280": "4040440000000103"
+}

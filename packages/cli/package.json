@@ -1,6 +1,6 @@
 {
   "name": "@sbr0nch/contextia",
-  "version": "2.0.4",
+  "version": "2.2.0",
   "description": "Contextia secret detection for the terminal.",
   "license": "MIT",
   "type": "module",
@@ -15,7 +15,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "prepublishOnly": "npm run build",
-    "test:proxy": "node build.mjs && node proxy-resilience.mjs"
+    "test:proxy": "node build.mjs && node proxy-resilience.mjs && node process-faults.mjs && node proxy-load.mjs"
   },
   "devDependencies": {
     "@sbr0nch/contextia-engine": "*",

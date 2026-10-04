@@ -11,6 +11,7 @@ import {
 import { markNode } from './brand.js'
 import { isLoopbackUrl, DEFAULT_STATS_URL } from './reporter.js'
 import { api } from './api.js'
+import { showLoadError } from './load-error.js'
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
   { id: 'warn', label: 'Warn', hint: 'Flag and let me decide' },
@@ -51,10 +52,12 @@ function card(title: string, sub = ''): HTMLElement {
   return c
 }
 
-function toggle(checked: boolean, onChange: (v: boolean) => void): HTMLElement {
+/** `name` is what a screen reader announces: the switch itself has no text, only a track. */
+function toggle(checked: boolean, onChange: (v: boolean) => void, name: string): HTMLElement {
   const wrap = el('label', 'cx-toggle')
   const cb = document.createElement('input')
   cb.type = 'checkbox'
+  cb.setAttribute('aria-label', name)
   cb.checked = checked
   cb.addEventListener('change', () => onChange(cb.checked))
   wrap.append(cb, el('span', 'cx-track'))
@@ -89,7 +92,7 @@ function renderModes(app: HTMLElement): void {
     el('div', 'cx-line-t', 'Add a “redacted by Contextia” note'),
     el('div', 'cx-line-s', 'Prepends one line to redacted messages. Off by default.'),
   )
-  sigRow.append(sigText, toggle(settings.signature, (v) => void persist({ signature: v })))
+  sigRow.append(sigText, toggle(settings.signature, (v) => void persist({ signature: v }), 'Add a redacted-by-Contextia note to redacted messages'))
   c.append(sigRow)
 
   app.append(c)
@@ -129,6 +132,7 @@ function renderDetectors(app: HTMLElement): void {
     left.append(el('span', `cx-sev ${d.severity}`), el('span', 'cx-det-name', d.label), el('span', 'cx-det-sev', d.severity))
     const cb = document.createElement('input')
     cb.type = 'checkbox'
+    cb.setAttribute('aria-label', `${d.label} (${d.severity})`)
     cb.checked = enabled.has(d.id)
     const t = el('label', 'cx-toggle')
     t.append(cb, el('span', 'cx-track'))
@@ -236,7 +240,7 @@ function renderIntegration(app: HTMLElement): void {
     }
     await persist({ localStatsEnabled: granted })
     if (!granted) void render()
-  })
+  }, 'Mirror catches to the local proxy dashboard')
   row.append(txt, t)
   c.append(row)
 
@@ -296,12 +300,19 @@ async function renderActivity(app: HTMLElement): Promise<void> {
 }
 
 async function render(): Promise<void> {
-  settings = await getSettings()
   const app = document.getElementById('app')
   if (!app) return
+  try {
+    settings = await getSettings()
+  } catch {
+    showLoadError(app, () => void render())
+    return
+  }
   app.replaceChildren()
 
   const brand = el('div', 'cx-brand')
+  brand.setAttribute('role', 'heading') // the page's level-one heading, without changing how it looks
+  brand.setAttribute('aria-level', '1')
   const mark = el('span', 'cx-mark')
   mark.replaceChildren(markNode())
   brand.append(mark, el('span', '', 'Contextia'))
@@ -311,7 +322,11 @@ async function render(): Promise<void> {
   renderDetectors(app)
   renderAllowlists(app)
   renderIntegration(app)
-  await renderActivity(app)
+  try {
+    await renderActivity(app)
+  } catch {
+    // the rest of the page works without the activity card
+  }
 }
 
 void render()

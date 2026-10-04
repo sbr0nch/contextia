@@ -17,6 +17,7 @@ import { connect } from 'node:net'
 import { spawn } from 'node:child_process'
 import { resolve, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { waitForPort } from './wait-port.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const CLI = join(here, 'dist/cli.js')
@@ -61,7 +62,7 @@ const proxy = spawn(
 )
 let stderr = ''
 proxy.stderr.on('data', (d) => (stderr += d))
-await sleep(1300)
+await waitForPort(PORT, proxy)
 
 const body = (content) => JSON.stringify({ model: 'x', messages: [{ role: 'user', content }] })
 
